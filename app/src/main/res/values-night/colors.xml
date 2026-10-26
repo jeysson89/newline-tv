@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="surface">#141416</color>
+    <color name="background">#0B0B0C</color>
+    <color name="card">#17171A</color>
+    <color name="card_focused">#2A1315</color>
+
+    <color name="text_primary">#F2F3F5</color>
+    <color name="text_secondary">#9AA3AD</color>
+
+    <color name="divider">#26272B</color>
+
+    <color name="logo_box_bg">#1E1F23</color>
+    <color name="logo_box_stroke">#2C2D33</color>
+    <color name="demo_bg">#241F14</color>
+    <color name="demo_text">#D9B679</color>
+
+    <color name="status_bar">#0B0B0C</color>
+    <color name="nav_bar">#0B0B0C</color>
+</resources>

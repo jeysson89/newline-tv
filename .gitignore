@@ -1,0 +1,32 @@
+# Gradle
+.gradle/
+build/
+app/build/
+gradle-app.setting
+.gradletasknamecache
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.navigation/
+
+# Локальная конфигурация
+local.properties
+keystore.properties
+keys/
+*.jks
+*.keystore
+*.p12
+*.pepk
+
+# Готовые сборки
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# ОС и логи
+.DS_Store
+Thumbs.db
+*.log

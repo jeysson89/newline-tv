@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_red">#E00010</color>
+    <color name="brand_dark">#181818</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="background">#F4F6F9</color>
+    <color name="card">#FFFFFF</color>
+    <color name="card_focused">#FFF1F1</color>
+
+    <color name="text_primary">#181818</color>
+    <color name="text_secondary">#6B7480</color>
+    <color name="text_on_brand">#FFFFFF</color>
+
+    <color name="divider">#E4E8EE</color>
+    <color name="focus_ring">#E00010</color>
+    <color name="icon_bg">#FFFFFF</color>
+    <color name="player_scrim">#B3000000</color>
+
+    <color name="logo_box_bg">#F6F7FA</color>
+    <color name="logo_box_stroke">#E7EBF1</color>
+    <color name="demo_bg">#FFF7E6</color>
+    <color name="demo_text">#8A6D3B</color>
+
+    <color name="status_bar">#FFFFFF</color>
+    <color name="nav_bar">#FFFFFF</color>
+</resources>

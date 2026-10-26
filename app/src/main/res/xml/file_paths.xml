@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Сюда UpdateManager скачивает APK обновления -->
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>

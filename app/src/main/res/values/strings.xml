@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Newline TV</string>
+
+    <string name="splash_loading">Загрузка каналов…</string>
+
+    <string name="channels_title">Каналы</string>
+    <string name="channels_count">%d каналов</string>
+    <string name="channels_empty">Список каналов пуст</string>
+    <string name="channels_error">Не удалось загрузить каналы</string>
+    <string name="loading">Загрузка…</string>
+    <string name="retry">Повторить</string>
+    <string name="demo_badge">Демо-режим</string>
+    <string name="demo_hint">Каналы не загружены. Проверьте подключение к сети и повторите попытку.</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_dark_theme">Тёмная тема</string>
+    <string name="settings_source">Источник каналов</string>
+    <string name="settings_source_portal">IPTVPORTAL</string>
+    <string name="settings_source_m3u">M3U</string>
+    <string name="settings_scale">Масштаб текста</string>
+    <string name="settings_scale_preview_title">Первый канал</string>
+    <string name="settings_scale_preview_sub">Общедоступные · HD</string>
+    <string name="settings_panel">Список каналов поверх видео</string>
+    <string name="settings_panel_enabled">Открывать по кнопке «Назад»</string>
+    <string name="settings_panel_enabled_hint">Видео продолжает воспроизводиться, список появляется полупрозрачным</string>
+    <string name="settings_panel_transparency">Прозрачность фона</string>
+    <string name="settings_channel_view">Вид списка каналов</string>
+    <string name="settings_channel_view_cards">Плитки</string>
+    <string name="settings_channel_view_list">Список</string>
+    <string name="settings_channel_view_hint">Плитки — крупные иконки, список — компактные строки с текущей передачей</string>
+    <string name="settings_updates">Обновления</string>
+    <string name="settings_check_updates">Проверить обновления</string>
+    <string name="settings_check_updates_hint">Новые версии публикуются на GitHub</string>
+    <string name="settings_version_value">Версия %1$s</string>
+    <string name="settings_support">Поддержка</string>
+    <string name="settings_support_text">ISP-NewLine — оператор связи г. Амвросиевка\n\nОфис (Пн-Вс) с 10.00 до 19.00\nНаши номера поддержки:\n+7-949-099-50-03 / +7-928-135-35-70\n\nОператор связи города Амвросиевка, с высокоскоростным доступом в Интернет.\nНаш адрес: ул. Молодежная 32\n\nTelegram, MAX: +79493069668</string>
+    <string name="settings_close">Закрыть</string>
+    <string name="settings_apply">Применить</string>
+    <string name="settings_saved">Сохранено</string>
+
+    <string name="player_error">Ошибка воспроизведения</string>
+    <string name="player_retry">Повторить</string>
+    <string name="player_live">LIVE</string>
+    <string name="player_prev">Предыдущий канал</string>
+    <string name="player_next">Следующий канал</string>
+    <string name="player_program">Телепрограмма</string>
+    <string name="player_epg_loading">Загрузка телепрограммы…</string>
+    <string name="player_epg_none">Телепрограмма недоступна</string>
+    <string name="player_epg_now">Сейчас: %1$s · %2$s</string>
+    <string name="player_epg_next">Далее: %1$s · %2$s</string>
+    <string name="player_epg_dialog_title">%1$s — телепрограмма</string>
+    <string name="player_epg_marker">▶ </string>
+    <string name="player_no_url">Для этого канала нет ссылки на поток</string>
+    <string name="player_no_video_stream">У этого канала нет видеопотока.</string>
+    <string name="player_reconnecting">Восстановление потока…</string>
+    <string name="player_stream_lost">Поток потерян. Проверьте соединение с интернетом.</string>
+    <string name="player_channels_title">Каналы</string>
+    <string name="player_channels_hint">Назад — закрыть</string>
+
+    <!-- Автообновление -->
+    <string name="update_title">Обновление</string>
+    <string name="update_checking">Проверка обновлений…</string>
+    <string name="update_check_failed">Не удалось проверить обновления. Проверьте подключение к интернету и повторите попытку.</string>
+    <string name="update_is_latest">У вас последняя версия: %1$s</string>
+    <string name="update_message">Установлена версия %1$s.\nДоступна новая версия %2$s.</string>
+    <string name="update_install">Обновить</string>
+    <string name="update_later">Позже</string>
+    <string name="update_cancel">Отмена</string>
+    <string name="update_downloading">Загрузка обновления…</string>
+    <string name="update_download_progress">%1$d%% · %2$s из %3$s</string>
+    <string name="update_download_failed">Не удалось загрузить обновление. Проверьте подключение и попробуйте ещё раз.</string>
+    <string name="update_invalid">Файл обновления повреждён или подписан другим ключом. Установка отменена.</string>
+    <string name="update_install_error">Не удалось запустить установщик. Скачайте новую версию вручную со страницы релиза.</string>
+    <string name="update_unknown_sources_title">Разрешите установку</string>
+    <string name="update_unknown_sources_text">Чтобы установить обновление, разрешите приложению «Newline TV» установку неизвестных приложений. После включения вернитесь в приложение — установка продолжится автоматически.</string>
+    <string name="update_open_settings">Открыть настройки</string>
+
+    <!-- Поддомен оператора в IPTVPORTAL (newline.iptvportal.ru) -->
+    <string name="portal_domain" translatable="false">newline</string>
+</resources>

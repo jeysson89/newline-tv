@@ -1,0 +1,83 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Параметры release-подписи хранятся вне репозитория (keystore.properties в .gitignore).
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasReleaseKey = keystorePropertiesFile.exists()
+if (hasReleaseKey) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+// Версию можно переопределить для тестовых сборок:
+// .\gradlew.bat assembleRelease -PappVersionCode=1 -PappVersionName=1.0.0
+def appVersionCode = (project.findProperty('appVersionCode') ?: '2').toInteger()
+def appVersionName = project.findProperty('appVersionName') ?: '1.1.0'
+
+android {
+    namespace 'com.newline.tv'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.newline.tv'
+        minSdk 21
+        targetSdk 34
+        versionCode appVersionCode
+        versionName appVersionName
+
+        // libVLC поставляется с нативными библиотеками для всех ABI — оставляем телефоны и ТВ-приставки.
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (hasReleaseKey) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ''
+            versionNameSuffix '-debug'
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Без локального ключа сборка не должна молча уходить в релиз с debug-подписью.
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // libVLC: собственный медиадвижок с программными декодерами (MPEG-2, MPEG-4, H.264/HEVC и др.),
+    // поэтому каналы оператора воспроизводятся независимо от аппаратных кодеков устройства.
+    implementation 'org.videolan.android:libvlc-all:3.7.2'
+}

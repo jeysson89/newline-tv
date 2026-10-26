@@ -10,6 +10,8 @@ import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -32,6 +34,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -69,19 +72,35 @@ public final class UpdateManager {
 
     private static final String USER_AGENT = "NewlineTV-Android";
     private static final long AUTO_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
+    /** Повтор после неудачной проверки (нет сети и т.п.). */
+    private static final long RETRY_INTERVAL_MS = 15L * 60L * 1000L;
     private static final long MIN_APK_BYTES = 1024L * 1024L;
 
     private static final ExecutorService pool = Executors.newSingleThreadExecutor();
+    private static final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private static volatile boolean checking;
     private static volatile boolean downloading;
     private static volatile boolean cancelDownload;
     private static volatile Call currentCall;
 
+    private static final WeakReference<Activity> NO_ACTIVITY = new WeakReference<>(null);
+    private static WeakReference<Activity> currentActivity = NO_ACTIVITY;
+    private static Release pendingRelease;
     private static File pendingApk;
     private static AlertDialog activeDialog;
 
     private UpdateManager() {
+    }
+
+    /** Экран стал активным: запоминаем его для показа результата проверки. */
+    public static void onActivityResumed(Activity activity) {
+        if (!isAlive(activity)) {
+            return;
+        }
+        currentActivity = new WeakReference<>(activity);
+        resumePendingInstall(activity);
+        maybeShowPendingRelease(activity);
     }
 
     /** Проверить релизы. manual=true — показать результат, даже если обновлений нет. */
@@ -89,6 +108,7 @@ public final class UpdateManager {
         if (!isAlive(activity)) {
             return;
         }
+        currentActivity = new WeakReference<>(activity);
         if (checking) {
             if (manual) {
                 toast(activity, R.string.update_checking);
@@ -96,14 +116,19 @@ public final class UpdateManager {
             return;
         }
 
+        final Context appContext = activity.getApplicationContext();
         long now = System.currentTimeMillis();
         if (!manual) {
-            long last = Settings.getLastUpdateCheck(activity);
-            if (last > 0 && now - last < AUTO_CHECK_INTERVAL_MS) {
+            long lastSuccess = Settings.getLastUpdateCheck(appContext);
+            long lastAttempt = Settings.getLastUpdateAttempt(appContext);
+            if (lastSuccess > 0 && now - lastSuccess < AUTO_CHECK_INTERVAL_MS) {
+                return;
+            }
+            if (lastAttempt > 0 && now - lastAttempt < RETRY_INTERVAL_MS) {
                 return;
             }
         }
-        Settings.setLastUpdateCheck(activity, now);
+        Settings.setLastUpdateAttempt(appContext, now);
         checking = true;
         if (manual) {
             toast(activity, R.string.update_checking);
@@ -119,31 +144,58 @@ public final class UpdateManager {
                     Log.w(TAG, "update check failed", e);
                 }
                 final Release result = release;
-                runOnUi(activity, new Runnable() {
+                // Результат показываем на том экране, который активен сейчас:
+                // список каналов мог уже передать управление плееру.
+                mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         checking = false;
-                        if (!isAlive(activity)) {
-                            return;
+                        Activity target = aliveActivity();
+                        if (target == null && isAlive(activity)) {
+                            target = activity;
                         }
                         if (result == null) {
-                            if (manual) {
-                                showError(activity, R.string.update_check_failed);
+                            if (manual && target != null) {
+                                showError(target, R.string.update_check_failed);
                             }
                             return;
                         }
+                        Settings.setLastUpdateCheck(appContext, System.currentTimeMillis());
                         if (compareVersions(result.version, BuildConfig.VERSION_NAME) <= 0) {
-                            if (manual) {
-                                toast(activity, activity.getString(
+                            if (manual && target != null) {
+                                toast(target, target.getString(
                                         R.string.update_is_latest, BuildConfig.VERSION_NAME));
                             }
                             return;
                         }
-                        showUpdateDialog(activity, result);
+                        pendingRelease = result;
+                        if (target != null) {
+                            maybeShowPendingRelease(target);
+                        }
                     }
                 });
             }
         });
+    }
+
+    private static Activity aliveActivity() {
+        Activity activity = currentActivity.get();
+        return isAlive(activity) ? activity : null;
+    }
+
+    private static void maybeShowPendingRelease(Activity activity) {
+        if (pendingRelease == null || !isAlive(activity)) {
+            return;
+        }
+        if (activeDialog != null && activeDialog.isShowing()) {
+            return;
+        }
+        Release release = pendingRelease;
+        pendingRelease = null;
+        if (compareVersions(release.version, BuildConfig.VERSION_NAME) <= 0) {
+            return;
+        }
+        showUpdateDialog(activity, release);
     }
 
     /** После возврата из настроек «Установка неизвестных приложений» продолжить установку. */
@@ -162,10 +214,14 @@ public final class UpdateManager {
 
     /** Закрыть диалог, привязанный к уничтожаемой активности, и остановить загрузку. */
     public static void onActivityDestroyed(Activity activity) {
-        if (activeDialog != null && activeDialog.getOwnerActivity() == activity) {
-            activeDialog.dismiss();
-            activeDialog = null;
+        if (currentActivity.get() == activity) {
+            currentActivity = NO_ACTIVITY;
         }
+        if (activeDialog == null || activeDialog.getOwnerActivity() != activity) {
+            return;
+        }
+        activeDialog.dismiss();
+        activeDialog = null;
         if (downloading) {
             cancelDownload = true;
             Call call = currentCall;
@@ -366,21 +422,37 @@ public final class UpdateManager {
             @Override
             public void run() {
                 Exception error = null;
-                try {
-                    download(release.apkUrl, part, activity, release.apkSize, bar, progressText);
-                    if (cancelDownload) {
-                        throw new IOException("cancelled");
+                // GitHub CDN иногда отвечает ошибкой сразу после публикации релиза —
+                // делаем несколько попыток, прежде чем показывать сообщение пользователю.
+                for (int attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        download(release.apkUrl, part, activity, release.apkSize, bar, progressText);
+                        if (cancelDownload) {
+                            throw new IOException("cancelled");
+                        }
+                        if (target.exists() && !target.delete()) {
+                            throw new IOException("cannot replace " + target);
+                        }
+                        if (!part.renameTo(target)) {
+                            throw new IOException("cannot rename " + part);
+                        }
+                        error = null;
+                        break;
+                    } catch (Exception e) {
+                        error = e;
+                        //noinspection ResultOfMethodCallIgnored
+                        part.delete();
+                        if (cancelDownload || attempt == 3) {
+                            break;
+                        }
+                        Log.w(TAG, "update download attempt " + attempt + " failed", e);
+                        try {
+                            Thread.sleep(1200L * attempt);
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
                     }
-                    if (target.exists() && !target.delete()) {
-                        throw new IOException("cannot replace " + target);
-                    }
-                    if (!part.renameTo(target)) {
-                        throw new IOException("cannot rename " + part);
-                    }
-                } catch (Exception e) {
-                    error = e;
-                    //noinspection ResultOfMethodCallIgnored
-                    part.delete();
                 }
                 final Exception failure = error;
                 runOnUi(activity, new Runnable() {

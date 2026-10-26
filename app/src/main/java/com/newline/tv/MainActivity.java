@@ -18,6 +18,7 @@ import com.newline.tv.data.Channel;
 import com.newline.tv.data.PlaylistRepository;
 import com.newline.tv.data.Settings;
 import com.newline.tv.ui.ChannelAdapter;
+import com.newline.tv.update.UpdateManager;
 
 import java.util.List;
 
@@ -87,6 +88,9 @@ public class MainActivity extends BaseActivity {
                 load();
             }
         });
+
+        // Автопроверка обновлений при старте (не чаще раза в 6 часов).
+        UpdateManager.checkForUpdates(this, false);
     }
 
     @Override

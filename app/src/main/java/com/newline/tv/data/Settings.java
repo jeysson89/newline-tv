@@ -29,6 +29,7 @@ public final class Settings {
     private static final String KEY_PANEL_TRANSPARENCY = "panel_transparency";
     private static final String KEY_CHANNEL_VIEW = "channel_view";
     private static final String KEY_LAST_UPDATE_CHECK = "last_update_check";
+    private static final String KEY_LAST_UPDATE_ATTEMPT = "last_update_attempt";
 
     /** Плейлист оператора по умолчанию (не менять). */
     public static final String DEFAULT_PLAYLIST_URL = "http://tv.isp-nl.ru/nltv.m3u";
@@ -123,6 +124,15 @@ public final class Settings {
 
     public static void setLastUpdateCheck(Context context, long timestamp) {
         prefs(context).edit().putLong(KEY_LAST_UPDATE_CHECK, timestamp).apply();
+    }
+
+    /** Последняя попытка проверки — чтобы не долбить сеть при ошибках. */
+    public static long getLastUpdateAttempt(Context context) {
+        return prefs(context).getLong(KEY_LAST_UPDATE_ATTEMPT, 0L);
+    }
+
+    public static void setLastUpdateAttempt(Context context, long timestamp) {
+        prefs(context).edit().putLong(KEY_LAST_UPDATE_ATTEMPT, timestamp).apply();
     }
 
     public static String getSource(Context context) {

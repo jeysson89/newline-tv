@@ -17,9 +17,9 @@ public abstract class BaseActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Если пользователь уходил разрешать установку из неизвестных источников,
-        // продолжаем установку скачанного обновления.
-        UpdateManager.resumePendingInstall(this);
+        // Запоминаем активный экран: сюда придёт результат проверки обновлений,
+        // а после разрешения установки из неизвестных источников продолжится установка.
+        UpdateManager.onActivityResumed(this);
     }
 
     @Override

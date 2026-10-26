@@ -27,6 +27,10 @@ public class SettingsActivity extends BaseActivity {
     private TextView scaleValue;
     private TextView scalePreviewTitle;
     private TextView scalePreviewSub;
+    private SeekBar epgScaleSeek;
+    private TextView epgScaleValue;
+    private TextView epgScalePreviewTime;
+    private TextView epgScalePreviewName;
     private SwitchCompat panelSwitch;
     private SeekBar panelSeek;
     private TextView panelValue;
@@ -63,6 +67,10 @@ public class SettingsActivity extends BaseActivity {
         scaleValue = findViewById(R.id.scaleValue);
         scalePreviewTitle = findViewById(R.id.scalePreviewTitle);
         scalePreviewSub = findViewById(R.id.scalePreviewSub);
+        epgScaleSeek = findViewById(R.id.epgScaleSeek);
+        epgScaleValue = findViewById(R.id.epgScaleValue);
+        epgScalePreviewTime = findViewById(R.id.epgScalePreviewTime);
+        epgScalePreviewName = findViewById(R.id.epgScalePreviewName);
         panelSwitch = findViewById(R.id.panelSwitch);
         panelSeek = findViewById(R.id.panelSeek);
         panelValue = findViewById(R.id.panelValue);
@@ -75,6 +83,7 @@ public class SettingsActivity extends BaseActivity {
         themeSwitch.setChecked(Settings.isDarkEffective(this));
 
         scaleSeek.setProgress(progressFor(Settings.getFontScale(this)));
+        epgScaleSeek.setProgress(progressFor(Settings.getEpgFontScale(this)));
 
         panelSwitch.setChecked(Settings.isPanelEnabled(this));
         panelSeek.setProgress(Settings.getPanelTransparency(this));
@@ -82,6 +91,7 @@ public class SettingsActivity extends BaseActivity {
         updateSourceUi();
         updateViewUi();
         updateScaleUi(scaleSeek.getProgress());
+        updateEpgScaleUi(epgScaleSeek.getProgress());
         updatePanelUi(panelSeek.getProgress());
         updateVersion.setText(getString(R.string.settings_version_value, BuildConfig.VERSION_NAME));
     }
@@ -130,6 +140,21 @@ public class SettingsActivity extends BaseActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 updateScaleUi(progress);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        epgScaleSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                updateEpgScaleUi(progress);
             }
 
             @Override
@@ -219,6 +244,16 @@ public class SettingsActivity extends BaseActivity {
         scalePreviewSub.setTextSize(TypedValue.COMPLEX_UNIT_PX, 13f * density * scale);
     }
 
+    private void updateEpgScaleUi(int progress) {
+        float scale = scaleFor(progress);
+        epgScaleValue.setText(Math.round(scale * 100f) + "%");
+
+        // Предпросмотр повторяет размеры строки телепрограммы: 15sp и 16sp.
+        float density = getResources().getDisplayMetrics().density;
+        epgScalePreviewTime.setTextSize(TypedValue.COMPLEX_UNIT_PX, 15f * density * scale);
+        epgScalePreviewName.setTextSize(TypedValue.COMPLEX_UNIT_PX, 16f * density * scale);
+    }
+
     private void updatePanelUi(int transparency) {
         panelValue.setText(transparency + "%");
 
@@ -241,6 +276,7 @@ public class SettingsActivity extends BaseActivity {
     private void apply() {
         Settings.setSource(this, source);
         Settings.setFontScale(this, scaleFor(scaleSeek.getProgress()));
+        Settings.setEpgFontScale(this, scaleFor(epgScaleSeek.getProgress()));
         Settings.setPanelEnabled(this, panelSwitch.isChecked());
         Settings.setPanelTransparency(this, panelSeek.getProgress());
         Settings.setChannelView(this, channelView);

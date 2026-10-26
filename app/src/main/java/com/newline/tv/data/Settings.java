@@ -22,6 +22,7 @@ public final class Settings {
     private static final String KEY_SOURCE = "source_type";
     private static final String KEY_PORTAL_DOMAIN = "portal_domain";
     private static final String KEY_FONT_SCALE = "font_scale";
+    private static final String KEY_EPG_FONT_SCALE = "epg_font_scale";
     private static final String KEY_THEME = "theme_mode";
     private static final String KEY_LAST_CHANNEL_URL = "last_channel_url";
     private static final String KEY_LAST_CHANNEL_NAME = "last_channel_name";
@@ -176,6 +177,20 @@ public final class Settings {
     public static void setFontScale(Context context, float scale) {
         float value = Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, scale));
         prefs(context).edit().putFloat(KEY_FONT_SCALE, value).apply();
+    }
+
+    /** Размер шрифта в диалоге телепрограммы — отдельно от общего масштаба интерфейса. */
+    public static float getEpgFontScale(Context context) {
+        // Пока пользователь не трогал отдельный ползунок, сохраняем прежний вид:
+        // телепрограмма масштабируется вместе с интерфейсом.
+        float fallback = getFontScale(context);
+        float value = prefs(context).getFloat(KEY_EPG_FONT_SCALE, fallback);
+        return Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, value));
+    }
+
+    public static void setEpgFontScale(Context context, float scale) {
+        float value = Math.max(FONT_SCALE_MIN, Math.min(FONT_SCALE_MAX, scale));
+        prefs(context).edit().putFloat(KEY_EPG_FONT_SCALE, value).apply();
     }
 
     public static int getThemeMode(Context context) {

@@ -1,21 +1,29 @@
 package com.newline.tv;
 
+import android.app.Dialog;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.PixelFormat;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -86,8 +94,16 @@ public class PlayerActivity extends BaseActivity {
 
     private List<Channel> channels;
     private int channelIndex = -1;
+    /** Масштаб текста, с которым создан экран: при изменении пересоздаём активность. */
+    private float appliedFontScale;
 
     private List<EpgProgram> epg;
+    /** Открытая телепрограмма: пока EPG грузится, диалог показывает ожидание. */
+    private Dialog epgDialog;
+    private RecyclerView epgDialogList;
+    private TextView epgDialogTitle;
+    private TextView epgDialogEmpty;
+    private int epgDialogChannel = -1;
     private final ExecutorService epgPool = Executors.newSingleThreadExecutor();
 
     private GestureDetector touchGestures;
@@ -147,6 +163,7 @@ public class PlayerActivity extends BaseActivity {
     @Override
     protected void onStop() {
         super.onStop();
+        dismissEpgDialog();
         // Уходя с экрана, полностью отпускаем медиаплеер: его поверхность всё равно разрушается.
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);
@@ -227,6 +244,7 @@ public class PlayerActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        appliedFontScale = Settings.getFontScale(this);
         setContentView(R.layout.activity_player);
 
         videoLayout = findViewById(R.id.videoLayout);
@@ -481,6 +499,7 @@ public class PlayerActivity extends BaseActivity {
                 }
                 epg = loaded;
                 updateProgramUi();
+                refreshEpgDialog();
             }
         });
     }
@@ -621,36 +640,204 @@ public class PlayerActivity extends BaseActivity {
     }
 
     private void showProgramDialog() {
-        if (epg == null) {
-            // Программа ещё загружается: портал отвечает или качается внешний XMLTV.
-            new AlertDialog.Builder(this)
-                    .setMessage(R.string.player_epg_loading)
-                    .setPositiveButton(R.string.settings_close, null)
-                    .show();
+        if (epgDialog != null && epgDialog.isShowing()) {
             return;
         }
-        if (epg.isEmpty()) {
-            new AlertDialog.Builder(this)
-                    .setMessage(R.string.player_epg_none)
-                    .setPositiveButton(R.string.settings_close, null)
-                    .show();
+
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_epg);
+        dialog.setCanceledOnTouchOutside(true);
+
+        epgDialog = dialog;
+        epgDialogChannel = channelIndex;
+        epgDialogTitle = dialog.findViewById(R.id.epgDialogTitle);
+        epgDialogList = dialog.findViewById(R.id.epgList);
+        epgDialogEmpty = dialog.findViewById(R.id.epgEmpty);
+        TextView close = dialog.findViewById(R.id.epgClose);
+
+        // Шрифт телепрограммы настраивается отдельным ползунком и не зависит
+        // от общего масштаба текста: задаём размеры в px.
+        float epgScale = Settings.getEpgFontScale(this);
+        float density = getResources().getDisplayMetrics().density;
+        epgDialogTitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, 20f * density * epgScale);
+        epgDialogEmpty.setTextSize(TypedValue.COMPLEX_UNIT_PX, 16f * density * epgScale);
+        close.setTextSize(TypedValue.COMPLEX_UNIT_PX, 17f * density * epgScale);
+
+        epgDialogList.setLayoutManager(new LinearLayoutManager(this));
+        epgDialogList.setHasFixedSize(true);
+
+        close.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface d) {
+                if (epgDialog == dialog) {
+                    epgDialog = null;
+                    epgDialogList = null;
+                    epgDialogTitle = null;
+                    epgDialogEmpty = null;
+                    epgDialogChannel = -1;
+                }
+            }
+        });
+
+        dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int width = Math.min((int) (metrics.widthPixels * 0.92f),
+                    (int) (640f * metrics.density));
+            int height = (int) (metrics.heightPixels * 0.82f);
+            // Окно делаем непрозрачным: иначе SurfaceView с видео просвечивает
+            // сквозь диалог и на части телевизоров картинка мерцает.
+            window.setFormat(PixelFormat.OPAQUE);
+            window.setBackgroundDrawable(new ColorDrawable(0xFF0B0D10));
+            window.setLayout(width, height);
+            window.setGravity(Gravity.CENTER);
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.dimAmount = 0.65f;
+            window.setAttributes(params);
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
+
+        renderEpgDialog();
+    }
+
+    /** Закрыть открытую телепрограмму (например, при уходе с экрана). */
+    private void dismissEpgDialog() {
+        if (epgDialog != null) {
+            epgDialog.dismiss();
+        }
+    }
+
+    /** Обновить открытую телепрограмму: данные могли только что загрузиться. */
+    private void refreshEpgDialog() {
+        if (epgDialog == null || !epgDialog.isShowing()
+                || epgDialogChannel != channelIndex) {
             return;
         }
+        renderEpgDialog();
+    }
+
+    private void renderEpgDialog() {
+        if (epgDialog == null || epgDialogList == null
+                || epgDialogTitle == null || epgDialogEmpty == null) {
+            return;
+        }
+
+        epgDialogTitle.setText(getString(R.string.player_epg_dialog_title,
+                channelName == null ? "" : channelName));
+
+        List<EpgProgram> programs = epg;
+        if (programs == null) {
+            epgDialogList.setVisibility(View.GONE);
+            epgDialogEmpty.setVisibility(View.VISIBLE);
+            epgDialogEmpty.setText(R.string.player_epg_loading);
+            return;
+        }
+        if (programs.isEmpty()) {
+            epgDialogList.setVisibility(View.GONE);
+            epgDialogEmpty.setVisibility(View.VISIBLE);
+            epgDialogEmpty.setText(R.string.player_epg_none);
+            return;
+        }
+
+        epgDialogEmpty.setVisibility(View.GONE);
+        epgDialogList.setVisibility(View.VISIBLE);
 
         long now = System.currentTimeMillis();
-        String[] items = new String[epg.size()];
-        for (int i = 0; i < epg.size(); i++) {
-            EpgProgram program = epg.get(i);
-            String prefix = program.isCurrent(now) ? getString(R.string.player_epg_marker) : "";
-            items[i] = prefix + program.timeRange() + "   " + program.title;
+        int currentIndex = -1;
+        for (int i = 0; i < programs.size(); i++) {
+            if (programs.get(i).isCurrent(now)) {
+                currentIndex = i;
+                break;
+            }
         }
 
-        new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.player_epg_dialog_title,
-                        channelName == null ? "" : channelName))
-                .setItems(items, null)
-                .setPositiveButton(R.string.settings_close, null)
-                .show();
+        float epgScale = Settings.getEpgFontScale(this);
+        epgDialogList.setAdapter(new EpgAdapter(programs, currentIndex, epgScale));
+        scrollEpgTo(currentIndex);
+    }
+
+    /** Прокрутить список так, чтобы текущая передача была первой видимой. */
+    private void scrollEpgTo(final int position) {
+        if (position < 0 || epgDialogList == null) {
+            return;
+        }
+        final RecyclerView list = epgDialogList;
+        list.post(new Runnable() {
+            @Override
+            public void run() {
+                RecyclerView.LayoutManager manager = list.getLayoutManager();
+                if (manager instanceof LinearLayoutManager) {
+                    ((LinearLayoutManager) manager)
+                            .scrollToPositionWithOffset(position, 0);
+                } else {
+                    list.scrollToPosition(position);
+                }
+            }
+        });
+    }
+
+    /** Строка телепрограммы: время и название передачи. */
+    private static final class EpgAdapter extends RecyclerView.Adapter<EpgAdapter.Holder> {
+
+        private final List<EpgProgram> programs;
+        private final int currentIndex;
+        private final float textScale;
+
+        EpgAdapter(List<EpgProgram> programs, int currentIndex, float textScale) {
+            this.programs = programs;
+            this.currentIndex = currentIndex;
+            this.textScale = textScale;
+        }
+
+        @Override
+        public Holder onCreateViewHolder(ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_epg, parent, false);
+            Holder holder = new Holder(view);
+            float density = parent.getResources().getDisplayMetrics().density;
+            holder.marker.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * density * textScale);
+            holder.time.setTextSize(TypedValue.COMPLEX_UNIT_PX, 15f * density * textScale);
+            holder.name.setTextSize(TypedValue.COMPLEX_UNIT_PX, 16f * density * textScale);
+            return holder;
+        }
+
+        @Override
+        public void onBindViewHolder(Holder holder, int position) {
+            EpgProgram program = programs.get(position);
+            boolean current = position == currentIndex;
+            holder.time.setText(program.timeRange());
+            holder.name.setText(program.title);
+            holder.marker.setVisibility(current ? View.VISIBLE : View.INVISIBLE);
+            holder.itemView.setBackgroundResource(
+                    current ? R.drawable.bg_epg_current : android.R.color.transparent);
+        }
+
+        @Override
+        public int getItemCount() {
+            return programs.size();
+        }
+
+        static final class Holder extends RecyclerView.ViewHolder {
+            final TextView marker;
+            final TextView time;
+            final TextView name;
+
+            Holder(View itemView) {
+                super(itemView);
+                marker = itemView.findViewById(R.id.epgMarker);
+                time = itemView.findViewById(R.id.epgTime);
+                name = itemView.findViewById(R.id.epgName);
+            }
+        }
     }
 
     private void switchChannel(int delta) {
@@ -1065,6 +1252,12 @@ public class PlayerActivity extends BaseActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Масштаб текста применяется пересозданием экрана с новым контекстом:
+        // иначе OSD и диалог телепрограммы останутся в старом размере.
+        if (Math.abs(Settings.getFontScale(this) - appliedFontScale) > 0.005f) {
+            recreate();
+            return;
+        }
         hideSystemUi();
         applyPanelScrim();
         applyChannelView();

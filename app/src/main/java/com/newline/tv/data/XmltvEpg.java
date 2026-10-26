@@ -52,6 +52,8 @@ public final class XmltvEpg {
     private static final String TAG = "NewlineTV";
     private static final String EPG_URL = "https://iptvx.one/EPG_LITE";
     private static final String CACHE_NAME = "xmltv-epg.tsv";
+    /** Версия формата кэша: при изменении правил сопоставления старый кэш сбрасывается. */
+    private static final int CACHE_VERSION = 3;
 
     /** Как часто обновлять телепрограмму. */
     private static final long TTL_MS = 12L * 60L * 60L * 1000L;
@@ -131,8 +133,8 @@ public final class XmltvEpg {
             return "";
         }
         String text = name.toLowerCase(Locale.ROOT).replace('ё', 'е');
-        text = text.replaceAll("\\(\\s*\\+\\s*(\\d+)\\s*\\)", " +$1 ");
-        text = text.replaceAll("\\[\\s*\\+\\s*(\\d+)\\s*\\]", " +$1 ");
+        text = text.replaceAll("\\(\\s*([+-])\\s*(\\d+)\\s*\\)", " $1$2 ");
+        text = text.replaceAll("\\[\\s*([+-])\\s*(\\d+)\\s*\\]", " $1$2 ");
         text = text.replaceAll("\\([^)]*\\)", " ");
         text = text.replaceAll("\\[[^\\]]*\\]", " ");
         text = removeWord(text, "телеканал");
@@ -147,8 +149,9 @@ public final class XmltvEpg {
         text = removeWord(text, "h\\.?265");
         // В названиях встречается латинское «TB» вместо кириллического «ТВ».
         text = text.replace("tv", "тв").replace("tb", "тв");
-        text = text.replaceAll("[^0-9a-zа-я+]+", " ");
+        text = text.replaceAll("[^0-9a-zа-я+\\-]+", " ");
         text = text.replaceAll("\\s*\\+\\s*", "+");
+        text = text.replaceAll("\\s*-\\s*(?=\\d)", "-");
         text = text.replaceAll("\\s*\\+$", "");
         text = text.replaceAll("\\s+", " ").trim();
         return text;
@@ -166,7 +169,7 @@ public final class XmltvEpg {
         }
         Set<String> keys = new LinkedHashSet<String>();
         keys.add(key);
-        String noShift = key.replaceAll("\\s*\\+\\d+$", "").trim();
+        String noShift = key.replaceAll("\\s*[+-]\\d+$", "").trim();
         if (!noShift.isEmpty()) {
             keys.add(noShift);
         }
@@ -230,10 +233,12 @@ public final class XmltvEpg {
                 return false;
             }
             String[] headerParts = header.substring(2).split(" ");
-            if (headerParts.length < 2 || !signature.equals(headerParts[0])) {
+            if (headerParts.length < 3
+                    || !Integer.toString(CACHE_VERSION).equals(headerParts[0])
+                    || !signature.equals(headerParts[1])) {
                 return false;
             }
-            long savedAt = Long.parseLong(headerParts[1]);
+            long savedAt = Long.parseLong(headerParts[2]);
             if (now - savedAt > TTL_MS || savedAt > now + 60L * 60L * 1000L) {
                 return false;
             }
@@ -445,7 +450,14 @@ public final class XmltvEpg {
         if (canonical != null) {
             return canonical;
         }
+        // Неподписанный канал не должен подхватывать программу со сдвигом +N:
+        // у «Карусели» и «Карусели +2» разные сетки вещания.
+        boolean shifted = exact.matches(".*[+-][1-9]\\d*$");
+        String exactNoSpaces = exact.replace(" ", "");
         for (String key : altKeys(displayName)) {
+            if (shifted && !key.equals(exact) && !key.equals(exactNoSpaces)) {
+                continue;
+            }
             canonical = canonicalByKey.get(key);
             if (canonical != null) {
                 return canonical;
@@ -503,6 +515,8 @@ public final class XmltvEpg {
             writer = new BufferedWriter(new OutputStreamWriter(
                     new FileOutputStream(temp), "UTF-8"));
             writer.write("# ");
+            writer.write(Integer.toString(CACHE_VERSION));
+            writer.write(' ');
             writer.write(signature);
             writer.write(' ');
             writer.write(Long.toString(now));

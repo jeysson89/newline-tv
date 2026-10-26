@@ -21,6 +21,9 @@
     <string name="settings_scale">Масштаб текста</string>
     <string name="settings_scale_preview_title">Первый канал</string>
     <string name="settings_scale_preview_sub">Общедоступные · HD</string>
+    <string name="settings_epg_scale">Шрифт телепрограммы</string>
+    <string name="settings_epg_scale_preview_time">20:00–21:00</string>
+    <string name="settings_epg_scale_preview_name">Первый канал</string>
     <string name="settings_panel">Список каналов поверх видео</string>
     <string name="settings_panel_enabled">Открывать по кнопке «Назад»</string>
     <string name="settings_panel_enabled_hint">Видео продолжает воспроизводиться, список появляется полупрозрачным</string>
@@ -31,7 +34,6 @@
     <string name="settings_channel_view_hint">Плитки — крупные иконки, список — компактные строки с текущей передачей</string>
     <string name="settings_updates">Обновления</string>
     <string name="settings_check_updates">Проверить обновления</string>
-    <string name="settings_check_updates_hint">Новые версии публикуются на GitHub</string>
     <string name="settings_version_value">Версия %1$s</string>
     <string name="settings_support">Поддержка</string>
     <string name="settings_support_text">ISP-NewLine — оператор связи г. Амвросиевка\n\nОфис (Пн-Вс) с 10.00 до 19.00\nНаши номера поддержки:\n+7-949-099-50-03 / +7-928-135-35-70\n\nОператор связи города Амвросиевка, с высокоскоростным доступом в Интернет.\nНаш адрес: ул. Молодежная 32\n\nTelegram, MAX: +79493069668</string>

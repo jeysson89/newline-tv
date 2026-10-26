@@ -156,6 +156,77 @@
 
         </LinearLayout>
 
+        <!-- 3b. Отдельный шрифт телепрограммы -->
+        <TextView
+            style="@style/SettingsSection"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:text="@string/settings_epg_scale" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <SeekBar
+                android:id="@+id/epgScaleSeek"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="50"
+                android:progressBackgroundTint="@color/divider"
+                android:progressTint="@color/brand_red"
+                android:splitTrack="false"
+                android:thumbTint="@color/brand_red" />
+
+            <TextView
+                android:id="@+id/epgScaleValue"
+                android:layout_width="64dp"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:text="100%"
+                android:textColor="@color/brand_red"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_logo_box"
+            android:gravity="center_vertical"
+            android:minHeight="56dp"
+            android:orientation="horizontal"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp">
+
+            <TextView
+                android:id="@+id/epgScalePreviewTime"
+                android:layout_width="104dp"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_epg_scale_preview_time"
+                android:textColor="@color/text_secondary"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/epgScalePreviewName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="@string/settings_epg_scale_preview_name"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp" />
+
+        </LinearLayout>
+
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
@@ -332,14 +403,6 @@
                     android:text="@string/settings_check_updates"
                     android:textColor="@color/text_primary"
                     android:textSize="17sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/settings_check_updates_hint"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/updateVersion"

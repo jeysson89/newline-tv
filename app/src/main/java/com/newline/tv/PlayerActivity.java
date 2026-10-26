@@ -281,7 +281,8 @@ public class PlayerActivity extends BaseActivity {
         // Сенсорное управление видео:
         //  - один тап — информация о канале и что идёт;
         //  - свайп слева направо — список каналов;
-        //  - свайп справа налево — телепрограмма (EPG).
+        //  - свайп справа налево — телепрограмма (EPG);
+        //  - свайп вверх/вниз — следующий/предыдущий канал, как на пульте.
         touchGestures = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onSingleTapConfirmed(MotionEvent e) {
@@ -300,7 +301,17 @@ public class PlayerActivity extends BaseActivity {
                 float dx = e2.getX() - e1.getX();
                 float dy = e2.getY() - e1.getY();
                 float minDistance = 90f * getResources().getDisplayMetrics().density;
-                if (Math.abs(dx) < minDistance || Math.abs(dx) <= Math.abs(dy)) {
+                float absDx = Math.abs(dx);
+                float absDy = Math.abs(dy);
+
+                // Вертикальный свайп повторяет вверх/вниз на пульте:
+                // вверх — следующий канал, вниз — предыдущий.
+                if (absDy >= minDistance && absDy > absDx) {
+                    switchChannel(dy < 0 ? 1 : -1);
+                    return true;
+                }
+
+                if (absDx < minDistance || absDx <= absDy) {
                     return false;
                 }
                 if (dx < 0) {

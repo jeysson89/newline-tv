@@ -26,6 +26,7 @@ import com.newline.tv.data.EpgProgram;
 import com.newline.tv.data.PlaylistRepository;
 import com.newline.tv.data.PortalClient;
 import com.newline.tv.data.Settings;
+import com.newline.tv.data.XmltvEpg;
 import com.newline.tv.ui.ChannelAdapter;
 import com.newline.tv.update.UpdateManager;
 
@@ -95,7 +96,7 @@ public class PlayerActivity extends BaseActivity {
     private final ExecutorService panelEpgPool = Executors.newFixedThreadPool(3);
     private final Map<String, String> nowCache = new HashMap<>();
     private final Map<String, Long> nowCachedAt = new HashMap<>();
-    private final Set<Integer> nowLoading = new HashSet<>();
+    private final Set<String> nowLoading = new HashSet<String>();
 
     private final Handler osdHandler = new Handler(Looper.getMainLooper());
     private final Runnable hideOsd = new Runnable() {
@@ -435,50 +436,53 @@ public class PlayerActivity extends BaseActivity {
         }
     }
 
-    /** Телепрограмма канала — портал отдаёт её по ID канала (channel_id). */
+    /** Телепрограмма канала: портал отдаёт её по ID, M3U — из внешнего XMLTV. */
     private void loadEpg() {
         final int index = channelIndex;
-        final int epgId = epgIdFor(index);
+        final List<Channel> channelList = channels;
 
         epg = null;
         programRow.setVisibility(View.GONE);
 
-        if (epgId <= 0) {
+        if (channelList == null || index < 0 || index >= channelList.size()) {
             return;
         }
+        final Channel channel = channelList.get(index);
+        final boolean usePortal = Settings.isPortalSource(this) && channel.epgId > 0;
 
         programText.setText(R.string.player_epg_loading);
         programRow.setVisibility(View.VISIBLE);
 
-        final String domain = Settings.getPortalDomain(this);
         epgPool.execute(new Runnable() {
             @Override
             public void run() {
                 List<EpgProgram> loaded = null;
-                try {
-                    loaded = PortalClient.loadEpg(domain, epgId);
-                } catch (IOException ignored) {
-                }
-                final List<EpgProgram> result = loaded;
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (channelIndex != index || isFinishing() || isDestroyed()) {
-                            return;
-                        }
-                        epg = result;
-                        updateProgramUi();
+                if (usePortal) {
+                    try {
+                        loaded = PortalClient.loadEpg(
+                                Settings.getPortalDomain(PlayerActivity.this), channel.epgId);
+                    } catch (IOException ignored) {
                     }
-                });
+                }
+                if (loaded == null || loaded.isEmpty()) {
+                    loaded = XmltvEpg.loadFor(PlayerActivity.this, channelList, channel);
+                }
+                postEpg(index, loaded);
             }
         });
     }
 
-    private int epgIdFor(int index) {
-        if (channels == null || index < 0 || index >= channels.size()) {
-            return 0;
-        }
-        return channels.get(index).epgId;
+    private void postEpg(final int index, final List<EpgProgram> loaded) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (channelIndex != index || isFinishing() || isDestroyed()) {
+                    return;
+                }
+                epg = loaded;
+                updateProgramUi();
+            }
+        });
     }
 
     private void updateProgramUi() {
@@ -531,7 +535,7 @@ public class PlayerActivity extends BaseActivity {
      * одновременных запросов, результат кэшируется и обновляется раз в 10 минут.
      */
     private void loadChannelNow(final Channel channel) {
-        if (channel == null || channel.epgId <= 0) {
+        if (channel == null) {
             return;
         }
         final String key = nowKey(channel);
@@ -541,25 +545,33 @@ public class PlayerActivity extends BaseActivity {
                 && System.currentTimeMillis() - cachedAt < NOW_CACHE_TTL_MS) {
             return;
         }
-        if (nowLoading.contains(channel.epgId)) {
+        if (nowLoading.contains(key)) {
             return;
         }
 
-        nowLoading.add(channel.epgId);
-        final String domain = Settings.getPortalDomain(this);
+        final List<Channel> channelList = channels;
+        final boolean usePortal = Settings.isPortalSource(this) && channel.epgId > 0;
+        nowLoading.add(key);
         panelEpgPool.execute(new Runnable() {
             @Override
             public void run() {
                 EpgProgram current = null;
-                try {
-                    current = currentProgram(PortalClient.loadEpg(domain, channel.epgId));
-                } catch (IOException ignored) {
+                if (usePortal) {
+                    try {
+                        current = currentProgram(PortalClient.loadEpg(
+                                Settings.getPortalDomain(PlayerActivity.this), channel.epgId));
+                    } catch (IOException ignored) {
+                    }
+                }
+                if (current == null) {
+                    current = currentProgram(
+                            XmltvEpg.loadFor(PlayerActivity.this, channelList, channel));
                 }
                 final EpgProgram result = current;
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        nowLoading.remove(channel.epgId);
+                        nowLoading.remove(key);
                         if (isFinishing() || isDestroyed()) {
                             return;
                         }
@@ -567,11 +579,10 @@ public class PlayerActivity extends BaseActivity {
                                 : getString(R.string.player_epg_now,
                                 result.title, result.timeRange());
                         long loadedAt = System.currentTimeMillis();
-                        // Один channel_id может быть у нескольких каналов (Первый и Первый HD) —
-                        // обновляем все, чтобы программа появилась у каждого.
-                        if (channels != null) {
-                            for (Channel item : channels) {
-                                if (item.epgId != channel.epgId) {
+                        // Один канал может быть в списке несколько раз (SD/HD, (+2)).
+                        if (channelList != null) {
+                            for (Channel item : channelList) {
+                                if (!sameEpgChannel(item, channel)) {
                                     continue;
                                 }
                                 String itemKey = nowKey(item);
@@ -594,16 +605,26 @@ public class PlayerActivity extends BaseActivity {
         });
     }
 
+    /** Каналы с общей телепрограммой: тот же channel_id или то же название. */
+    private static boolean sameEpgChannel(Channel a, Channel b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.epgId > 0 && b.epgId > 0) {
+            return a.epgId == b.epgId;
+        }
+        return XmltvEpg.normalizeName(a.name).equals(XmltvEpg.normalizeName(b.name));
+    }
+
     private static String nowKey(Channel channel) {
         return channel.url + "\n" + channel.name;
     }
 
     private void showProgramDialog() {
         if (epg == null) {
-            // Программа ещё не получена: либо канал без EPG, либо портал ещё отвечает.
-            boolean hasEpgId = epgIdFor(channelIndex) > 0;
+            // Программа ещё загружается: портал отвечает или качается внешний XMLTV.
             new AlertDialog.Builder(this)
-                    .setMessage(hasEpgId ? R.string.player_epg_loading : R.string.player_epg_none)
+                    .setMessage(R.string.player_epg_loading)
                     .setPositiveButton(R.string.settings_close, null)
                     .show();
             return;

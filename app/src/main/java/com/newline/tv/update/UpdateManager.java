@@ -455,7 +455,9 @@ public final class UpdateManager {
                     }
                 }
                 final Exception failure = error;
-                runOnUi(activity, new Runnable() {
+                // Чистим состояние даже если экран уже закрылся, иначе следующая
+                // попытка обновления навсегда упрётся в downloading == true.
+                mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         downloading = false;

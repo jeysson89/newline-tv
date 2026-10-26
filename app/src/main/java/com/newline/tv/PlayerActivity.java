@@ -7,7 +7,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ProgressBar;
@@ -49,7 +51,7 @@ public class PlayerActivity extends BaseActivity {
 
     private static final String TAG = "NewlineTV";
 
-    private static final long OSD_TIMEOUT_MS = 3000L;
+    private static final long OSD_TIMEOUT_MS = 5000L;
     private static final long VIDEO_CHECK_MS = 4000L;
     /** Сколько хранить мини-телепрограмму строки, прежде чем обновить её. */
     private static final long NOW_CACHE_TTL_MS = 10 * 60 * 1000L;
@@ -86,6 +88,8 @@ public class PlayerActivity extends BaseActivity {
 
     private List<EpgProgram> epg;
     private final ExecutorService epgPool = Executors.newSingleThreadExecutor();
+
+    private GestureDetector touchGestures;
 
     // Мини-телепрограмма строк списка: кэш «что сейчас идёт» по каналам.
     private final ExecutorService panelEpgPool = Executors.newFixedThreadPool(3);
@@ -255,16 +259,50 @@ public class PlayerActivity extends BaseActivity {
         channelList.setAdapter(channelAdapter);
         applyChannelView();
 
-        // Касание видео открывает список каналов (на пульте — кнопка «Меню»).
+        // Сенсорное управление видео:
+        //  - один тап — информация о канале и что идёт;
+        //  - свайп слева направо — список каналов;
+        //  - свайп справа налево — телепрограмма (EPG).
+        touchGestures = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                if (channelPanel.getVisibility() != View.VISIBLE) {
+                    showOsd();
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+                if (e1 == null || e2 == null || channelPanel.getVisibility() == View.VISIBLE) {
+                    return false;
+                }
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                float minDistance = 90f * getResources().getDisplayMetrics().density;
+                if (Math.abs(dx) < minDistance || Math.abs(dx) <= Math.abs(dy)) {
+                    return false;
+                }
+                if (dx < 0) {
+                    // Свайп справа налево — телепрограмма канала.
+                    showProgramDialog();
+                } else {
+                    // Свайп слева направо — список каналов.
+                    if (channels != null && !channels.isEmpty()) {
+                        showChannelPanel();
+                    }
+                }
+                return true;
+            }
+        });
         videoLayout.setClickable(true);
         videoLayout.setFocusable(false);
         videoLayout.setFocusableInTouchMode(false);
-        videoLayout.setOnClickListener(new View.OnClickListener() {
+        videoLayout.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View v) {
-                if (channelPanel.getVisibility() != View.VISIBLE) {
-                    showChannelPanel();
-                }
+            public boolean onTouch(View v, MotionEvent event) {
+                return touchGestures.onTouchEvent(event);
             }
         });
 
@@ -374,7 +412,7 @@ public class PlayerActivity extends BaseActivity {
         updateChannelUi();
     }
 
-    /** Инфопанель канала: показываем и прячем через 3 секунды без действий. */
+    /** Инфопанель канала: показываем и прячем через 5 секунд без действий. */
     private void showOsd() {
         if (topBar == null) {
             return;
@@ -561,7 +599,16 @@ public class PlayerActivity extends BaseActivity {
     }
 
     private void showProgramDialog() {
-        if (epg == null || epg.isEmpty()) {
+        if (epg == null) {
+            // Программа ещё не получена: либо канал без EPG, либо портал ещё отвечает.
+            boolean hasEpgId = epgIdFor(channelIndex) > 0;
+            new AlertDialog.Builder(this)
+                    .setMessage(hasEpgId ? R.string.player_epg_loading : R.string.player_epg_none)
+                    .setPositiveButton(R.string.settings_close, null)
+                    .show();
+            return;
+        }
+        if (epg.isEmpty()) {
             new AlertDialog.Builder(this)
                     .setMessage(R.string.player_epg_none)
                     .setPositiveButton(R.string.settings_close, null)
@@ -681,15 +728,19 @@ public class PlayerActivity extends BaseActivity {
                 return true;
             }
 
-            // Вверх — телепрограмма текущего канала.
+            // Вверх/вниз — переключение каналов.
             if (code == KeyEvent.KEYCODE_DPAD_UP) {
-                showProgramDialog();
+                switchChannel(1);
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
+                switchChannel(-1);
                 return true;
             }
 
-            // Вниз — список каналов поверх видео.
-            if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
-                showChannelPanel();
+            // ОК — информация о канале: что идёт сейчас и дальше (телепрограмма).
+            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) {
+                showProgramDialog();
                 return true;
             }
         }

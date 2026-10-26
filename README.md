@@ -65,7 +65,7 @@ keyPassword=...
 <https://github.com/jeysson89/newline-tv/releases/latest>
 
 ```powershell
-adb install -r NewlineTV-1.1.0.apk
+adb install -r NewlineTV-1.1.1.apk
 ```
 
 На ТВ — через USB-накопитель или `adb connect <ip-tv>:5555`.
@@ -81,7 +81,7 @@ debug-сборки потребует удалить её (настройки п
   GitHub API (60 запросов в час на IP), что важно для абонентов за NAT.
   Если редирект недоступен, используется GitHub API как резервный вариант.
 - APK скачивается по фиксированному имени: **`NewlineTV-<версия>.apk`**
-  (например, `NewlineTV-1.1.0.apk`). Это имя обязательно должно совпадать
+  (например, `NewlineTV-1.1.1.apk`). Это имя обязательно должно совпадать
   с версией в теге релиза.
 - Скачанный файл проверяется: package name `com.newline.tv` и подпись должны
   совпадать с установленным приложением.

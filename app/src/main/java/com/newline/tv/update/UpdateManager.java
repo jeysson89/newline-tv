@@ -619,13 +619,18 @@ public final class UpdateManager {
         if (!context.getPackageName().equals(archive.packageName)) {
             return "package " + archive.packageName;
         }
+        // Signature check is best effort: the Android installer always verifies
+        // that an update is signed by the same key. On some vendor builds
+        // (Android 13 / TECNO) PackageManager returns no signer for an APK
+        // archive, so a missing signer must not block the installation.
         String archiveSigner = signerSha256(archive);
         String installedSigner = signerSha256(installed);
-        if (archiveSigner == null || installedSigner == null) {
-            return "no signature";
-        }
-        if (!archiveSigner.equals(installedSigner)) {
+        if (archiveSigner != null && installedSigner != null
+                && !archiveSigner.equals(installedSigner)) {
             return "signature mismatch";
+        }
+        if (archiveSigner == null) {
+            Log.w(TAG, "archive signer unavailable, installer will verify it");
         }
         return null;
     }

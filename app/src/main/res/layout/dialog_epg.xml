@@ -32,6 +32,8 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
+        android:descendantFocusability="blocksDescendants"
+        android:focusable="true"
         android:overScrollMode="never"
         android:scrollbars="vertical" />
 
@@ -52,6 +54,8 @@
         android:layout_height="52dp"
         android:layout_marginTop="12dp"
         android:background="@drawable/bg_epg_close"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
         android:text="@string/settings_close"
         android:textAllCaps="false"
         android:textColor="#FFFFFF"

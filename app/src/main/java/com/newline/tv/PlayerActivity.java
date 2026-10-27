@@ -105,6 +105,12 @@ public class PlayerActivity extends BaseActivity {
     private TextView epgDialogEmpty;
     private int epgDialogChannel = -1;
     private final ExecutorService epgPool = Executors.newSingleThreadExecutor();
+    private final Handler epgPollHandler = new Handler(Looper.getMainLooper());
+
+    /** Позиция выбора в списке каналов: навигация пультом не зависит от фокуса Android. */
+    private int panelIndex = -1;
+    /** true — пульт сейчас на кнопке настроек в шапке списка каналов. */
+    private boolean panelHeaderFocus;
 
     private GestureDetector touchGestures;
 
@@ -407,6 +413,10 @@ public class PlayerActivity extends BaseActivity {
         }
 
         channels = cached;
+        if (!Settings.isPortalSource(this)) {
+            // Телепрограмма грузится заранее: к открытию диалога она уже готова.
+            XmltvEpg.warmUp(this, channels);
+        }
         channelIndex = 0;
         boolean found = false;
         int urlIndex = -1;
@@ -684,9 +694,42 @@ public class PlayerActivity extends BaseActivity {
                 dialog.dismiss();
             }
         });
+        // Пульт: вверх/вниз листают программу, ОК и «Назад» закрывают.
+        // Без этого диалог управлялся только мышью.
+        dialog.setOnKeyListener(new DialogInterface.OnKeyListener() {
+            @Override
+            public boolean onKey(DialogInterface d, int keyCode, KeyEvent event) {
+                if (!isEpgDialogKey(keyCode)) {
+                    return false;
+                }
+                if (event.getAction() != KeyEvent.ACTION_DOWN) {
+                    return true;
+                }
+                int rowHeight = Math.round(
+                        56f * getResources().getDisplayMetrics().density);
+                switch (keyCode) {
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                        scrollEpgBy(-rowHeight);
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        scrollEpgBy(rowHeight);
+                        return true;
+                    case KeyEvent.KEYCODE_PAGE_UP:
+                        scrollEpgBy(-rowHeight * 5);
+                        return true;
+                    case KeyEvent.KEYCODE_PAGE_DOWN:
+                        scrollEpgBy(rowHeight * 5);
+                        return true;
+                    default:
+                        dialog.dismiss();
+                        return true;
+                }
+            }
+        });
         dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
             @Override
             public void onDismiss(DialogInterface d) {
+                epgPollHandler.removeCallbacks(epgPoll);
                 if (epgDialog == dialog) {
                     epgDialog = null;
                     epgDialogList = null;
@@ -718,7 +761,62 @@ public class PlayerActivity extends BaseActivity {
         }
 
         renderEpgDialog();
+
+        // Пока данных нет, диалог сам подхватит их, как только разбор
+        // нужного канала закончится, — без повторного открытия.
+        epgPollHandler.removeCallbacks(epgPoll);
+        if (epg == null) {
+            epgPollHandler.post(epgPoll);
+        }
     }
+
+    /** Клавиши, которые в диалоге телепрограммы обрабатываем сами. */
+    private static boolean isEpgDialogKey(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_MENU:
+            case KeyEvent.KEYCODE_ESCAPE:
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_PAGE_UP:
+            case KeyEvent.KEYCODE_PAGE_DOWN:
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void scrollEpgBy(int dy) {
+        if (epgDialogList != null) {
+            epgDialogList.scrollBy(0, dy);
+        }
+    }
+
+    /** Ждёт готовности телепрограммы, пока открыт диалог. */
+    private final Runnable epgPoll = new Runnable() {
+        @Override
+        public void run() {
+            if (epgDialog == null || !epgDialog.isShowing()) {
+                return;
+            }
+            if (epg == null && channels != null
+                    && channelIndex >= 0 && channelIndex < channels.size()) {
+                List<EpgProgram> ready = XmltvEpg.peek(channels.get(channelIndex));
+                if (!ready.isEmpty()) {
+                    epg = ready;
+                    updateProgramUi();
+                    renderEpgDialog();
+                    return;
+                }
+            }
+            if (epg == null) {
+                epgPollHandler.postDelayed(this, 500);
+            }
+        }
+    };
 
     /** Закрыть открытую телепрограмму (например, при уходе с экрана). */
     private void dismissEpgDialog() {
@@ -856,7 +954,6 @@ public class PlayerActivity extends BaseActivity {
             return;
         }
         overlayShownOnce = false;
-
         int next = channelIndex + delta;
         if (next < 0) {
             next = channels.size() - 1;
@@ -865,6 +962,7 @@ public class PlayerActivity extends BaseActivity {
         }
 
         channelIndex = next;
+        panelIndex = next;
         Channel channel = channels.get(next);
         streamUrl = channel.url;
         channelName = channel.name;
@@ -893,13 +991,7 @@ public class PlayerActivity extends BaseActivity {
 
         // Пока открыт список каналов — клавиши работают с ним, видео продолжает идти.
         if (channelPanel.getVisibility() == View.VISIBLE) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN
-                    && (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_MENU)) {
-                hideChannelPanel();
-                overlayShownOnce = true;
-                return true;
-            }
-            return super.dispatchKeyEvent(event);
+            return handlePanelKey(event);
         }
 
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
@@ -966,9 +1058,33 @@ public class PlayerActivity extends BaseActivity {
         return super.dispatchKeyEvent(event);
     }
 
+    /**
+     * Колесо мыши и аэропульт в режиме мыши присылают прокрутку, а не клавиши.
+     * Без этого «вверх/вниз» на таких пультах не переключает каналы.
+     */
+    @Override
+    public boolean onGenericMotionEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_SCROLL
+                && channelPanel.getVisibility() != View.VISIBLE) {
+            float scroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+            if (scroll < -0.1f) {
+                switchChannel(1);
+                return true;
+            }
+            if (scroll > 0.1f) {
+                switchChannel(-1);
+                return true;
+            }
+        }
+        return super.onGenericMotionEvent(event);
+    }
+
     private int panelColumns() {
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         float widthDp = metrics.widthPixels / metrics.density;
+        if (Settings.VIEW_LIST.equals(Settings.getChannelView(this))) {
+            return 1;
+        }
         if (widthDp >= 1280f) {
             return 4;
         }
@@ -979,6 +1095,119 @@ public class PlayerActivity extends BaseActivity {
             return 2;
         }
         return 1;
+    }
+
+    /**
+     * Клавиши пульта в открытом списке каналов. Навигация считается вручную:
+     * на части приставок фокус не попадает в RecyclerView, и список остаётся
+     * неуправляемым, хотя мышью канал выбрать можно.
+     */
+    private boolean handlePanelKey(KeyEvent event) {
+        int code = event.getKeyCode();
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            // Отпускание тоже перехватываем, иначе Android начнёт свою навигацию.
+            return true;
+        }
+
+        if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_MENU) {
+            hideChannelPanel();
+            overlayShownOnce = true;
+            return true;
+        }
+
+        boolean confirm = code == KeyEvent.KEYCODE_DPAD_CENTER
+                || code == KeyEvent.KEYCODE_ENTER
+                || code == KeyEvent.KEYCODE_NUMPAD_ENTER;
+
+        // Фокус на кнопке настроек в шапке списка: вниз — обратно к каналам.
+        if (panelHeaderFocus) {
+            if (confirm) {
+                startActivity(new Intent(this, SettingsActivity.class));
+                return true;
+            }
+            if (code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_PAGE_DOWN
+                    || code == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                panelHeaderFocus = false;
+                if (channels != null && !channels.isEmpty()) {
+                    panelIndex = Math.max(0, Math.min(panelIndex, channels.size() - 1));
+                    focusPanelItem(panelIndex, 0);
+                }
+            }
+            return true;
+        }
+
+        int columns = panelColumns();
+
+        // С верхней строки списка «вверх» уводит на кнопку настроек.
+        if (code == KeyEvent.KEYCODE_DPAD_UP && panelIndex < columns) {
+            View gear = findViewById(R.id.btnPanelSettings);
+            if (gear != null) {
+                panelHeaderFocus = true;
+                gear.requestFocus();
+                return true;
+            }
+        }
+
+        int step;
+        switch (code) {
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_CHANNEL_UP:
+            case KeyEvent.KEYCODE_PAGE_UP:
+                step = -columns;
+                break;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+            case KeyEvent.KEYCODE_CHANNEL_DOWN:
+            case KeyEvent.KEYCODE_PAGE_DOWN:
+                step = columns;
+                break;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (columns == 1) {
+                    // В режиме списка «влево» уводит на кнопку настроек.
+                    View gear = findViewById(R.id.btnPanelSettings);
+                    if (gear != null) {
+                        panelHeaderFocus = true;
+                        gear.requestFocus();
+                    }
+                    return true;
+                }
+                step = -1;
+                break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (columns == 1) {
+                    return true;
+                }
+                step = 1;
+                break;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER:
+                if (channels != null && panelIndex >= 0 && panelIndex < channels.size()) {
+                    selectChannelFromPanel(channels.get(panelIndex));
+                }
+                return true;
+            default:
+                return super.dispatchKeyEvent(event);
+        }
+
+        movePanelSelection(step);
+        return true;
+    }
+
+    private void movePanelSelection(int step) {
+        if (channels == null || channels.isEmpty()) {
+            return;
+        }
+        int next = panelIndex + step;
+        if (next < 0) {
+            next = 0;
+        } else if (next >= channels.size()) {
+            next = channels.size() - 1;
+        }
+        if (next == panelIndex) {
+            return;
+        }
+        panelIndex = next;
+        focusPanelItem(next, 0);
     }
 
     /** Показывает полупрозрачный список каналов поверх видео (видео не останавливается). */
@@ -992,35 +1221,32 @@ public class PlayerActivity extends BaseActivity {
         osdHandler.removeCallbacks(hideOsd);
         channelAdapter.setItems(channels);
         channelPanel.setVisibility(View.VISIBLE);
-        channelList.requestFocus();
-        focusCurrentChannel();
-    }
-
-    /** Ставит фокус на текущий канал и прокручивает список к нему. */
-    private void focusCurrentChannel() {
-        focusCurrentChannel(0);
-    }
-
-    private void focusCurrentChannel(final int attempt) {
-        if (channels == null || channels.isEmpty()) {
-            return;
-        }
-        final int position = channelIndex < 0
+        panelHeaderFocus = false;
+        panelIndex = channelIndex < 0
                 ? 0
                 : Math.min(channelIndex, channels.size() - 1);
+        channelList.requestFocus();
+        focusPanelItem(panelIndex, 0);
+    }
+
+    /** Ставит фокус на выбранный канал и прокручивает список к нему. */
+    private void focusPanelItem(final int position, final int attempt) {
+        if (channels == null || channels.isEmpty() || panelHeaderFocus) {
+            return;
+        }
         channelList.scrollToPosition(position);
         channelList.postDelayed(new Runnable() {
             @Override
             public void run() {
-                if (channelPanel.getVisibility() != View.VISIBLE) {
+                if (channelPanel.getVisibility() != View.VISIBLE || panelHeaderFocus) {
                     return;
                 }
                 RecyclerView.ViewHolder holder = channelList.findViewHolderForAdapterPosition(position);
                 if (holder != null) {
                     holder.itemView.requestFocus();
-                } else if (attempt < 5) {
+                } else if (attempt < 6) {
                     // После смены LayoutManager список может ещё не успеть разложиться.
-                    focusCurrentChannel(attempt + 1);
+                    focusPanelItem(position, attempt + 1);
                 } else {
                     channelList.requestFocus();
                 }
@@ -1049,12 +1275,13 @@ public class PlayerActivity extends BaseActivity {
         } else {
             channelList.setLayoutManager(new GridLayoutManager(this, panelColumns()));
         }
-        if (channelPanel.getVisibility() == View.VISIBLE) {
-            focusCurrentChannel();
+        if (channelPanel.getVisibility() == View.VISIBLE && panelIndex >= 0) {
+            focusPanelItem(panelIndex, 0);
         }
     }
 
     private void hideChannelPanel() {
+        panelHeaderFocus = false;
         channelPanel.setVisibility(View.GONE);
     }
 
@@ -1104,6 +1331,7 @@ public class PlayerActivity extends BaseActivity {
         }
 
         channelIndex = index;
+        panelIndex = index;
         Channel selected = channels.get(index);
         streamUrl = selected.url;
         channelName = selected.name;
@@ -1305,6 +1533,7 @@ public class PlayerActivity extends BaseActivity {
     protected void onDestroy() {
         epgPool.shutdownNow();
         panelEpgPool.shutdownNow();
+        epgPollHandler.removeCallbacks(epgPoll);
         osdHandler.removeCallbacks(hideOsd);
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);

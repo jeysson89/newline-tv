@@ -106,15 +106,15 @@ public final class Settings {
         prefs(context).edit().putInt(KEY_PANEL_TRANSPARENCY, value).apply();
     }
 
-    /** Выбранный вид списка каналов: «Плитки» или «Список». */
+    /** Выбранный вид списка каналов: «Плитки» или «Список». По умолчанию — строки. */
     public static String getChannelView(Context context) {
-        String value = prefs(context).getString(KEY_CHANNEL_VIEW, VIEW_CARDS);
-        return VIEW_LIST.equals(value) ? VIEW_LIST : VIEW_CARDS;
+        String value = prefs(context).getString(KEY_CHANNEL_VIEW, VIEW_LIST);
+        return VIEW_CARDS.equals(value) ? VIEW_CARDS : VIEW_LIST;
     }
 
     public static void setChannelView(Context context, String view) {
         prefs(context).edit()
-                .putString(KEY_CHANNEL_VIEW, VIEW_LIST.equals(view) ? VIEW_LIST : VIEW_CARDS)
+                .putString(KEY_CHANNEL_VIEW, VIEW_CARDS.equals(view) ? VIEW_CARDS : VIEW_LIST)
                 .apply();
     }
 

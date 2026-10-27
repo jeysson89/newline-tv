@@ -58,7 +58,7 @@
     <string name="player_reconnecting">Восстановление потока…</string>
     <string name="player_stream_lost">Поток потерян. Проверьте соединение с интернетом.</string>
     <string name="player_channels_title">Каналы</string>
-    <string name="player_channels_hint">Назад — закрыть</string>
+    <string name="player_channels_hint">◀ — настройки, Назад — закрыть</string>
 
     <!-- Автообновление -->
     <string name="update_title">Обновление</string>

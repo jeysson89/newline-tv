@@ -28,9 +28,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="30dp"
+            android:addStatesFromChildren="true"
+            android:background="@drawable/bg_seek_row"
             android:gravity="center_vertical"
             android:minHeight="52dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp">
 
             <TextView
                 android:layout_width="0dp"
@@ -99,14 +103,21 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:addStatesFromChildren="true"
+            android:background="@drawable/bg_seek_row"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingTop="6dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="6dp">
 
             <SeekBar
                 android:id="@+id/scaleSeek"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:focusable="true"
                 android:max="100"
                 android:progress="50"
                 android:progressBackgroundTint="@color/divider"
@@ -168,14 +179,21 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
+            android:addStatesFromChildren="true"
+            android:background="@drawable/bg_seek_row"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingTop="6dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="6dp">
 
             <SeekBar
                 android:id="@+id/epgScaleSeek"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:focusable="true"
                 android:max="100"
                 android:progress="50"
                 android:progressBackgroundTint="@color/divider"
@@ -245,9 +263,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:addStatesFromChildren="true"
+            android:background="@drawable/bg_seek_row"
             android:gravity="center_vertical"
             android:minHeight="52dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -285,8 +307,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
+            android:addStatesFromChildren="true"
+            android:background="@drawable/bg_seek_row"
             android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingTop="6dp"
+            android:paddingRight="8dp"
+            android:paddingBottom="6dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -301,6 +329,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
                 android:layout_weight="1"
+                android:focusable="true"
                 android:max="100"
                 android:progress="30"
                 android:progressBackgroundTint="@color/divider"

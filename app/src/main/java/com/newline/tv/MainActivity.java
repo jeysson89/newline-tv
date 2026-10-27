@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.newline.tv.data.Channel;
 import com.newline.tv.data.PlaylistRepository;
 import com.newline.tv.data.Settings;
+import com.newline.tv.data.XmltvEpg;
 import com.newline.tv.ui.ChannelAdapter;
 import com.newline.tv.update.UpdateManager;
 
@@ -171,6 +172,12 @@ public class MainActivity extends BaseActivity {
         counter.setText(getString(R.string.channels_count, channels.size()));
         demoHint.setVisibility(demo ? View.VISIBLE : View.GONE);
 
+        // Телепрограмму качаем заранее — к моменту открытия плеера она уже готова.
+        if (!demo && !Settings.isPortalSource(this) && channels != null
+                && !channels.isEmpty()) {
+            XmltvEpg.warmUp(this, channels);
+        }
+
         maybeAutoStart();
 
         if (!resetScroll) {
@@ -178,15 +185,27 @@ public class MainActivity extends BaseActivity {
         }
 
         grid.scrollToPosition(0);
+        focusFirstChannel(0);
+    }
+
+    /** Ставит фокус на первый канал: без него пульт не управляет списком. */
+    private void focusFirstChannel(final int attempt) {
         grid.postDelayed(new Runnable() {
             @Override
             public void run() {
+                if (adapter.getItemCount() == 0) {
+                    return;
+                }
                 RecyclerView.ViewHolder holder = grid.findViewHolderForAdapterPosition(0);
                 if (holder != null) {
                     holder.itemView.requestFocus();
+                } else if (attempt < 6) {
+                    focusFirstChannel(attempt + 1);
+                } else {
+                    grid.requestFocus();
                 }
             }
-        }, 150);
+        }, attempt == 0 ? 120 : 80);
     }
 
     private void showError(String message) {

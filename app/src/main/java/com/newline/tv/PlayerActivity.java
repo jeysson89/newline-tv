@@ -134,6 +134,14 @@ public class PlayerActivity extends BaseActivity {
     private boolean videoOutputStarted;
     private boolean wantPlay = true;
 
+    // Stop/play у libVLC блокируют поток, пока VLC закрывает сетевой поток. На медленном
+    // канале это занимало больше 8 секунд, и при быстром переключении пультом система
+    // показывала «Приложение не отвечает». Поэтому все блокирующие вызовы плеера идут
+    // в отдельном потоке, строго по очереди.
+    private final ExecutorService streamExecutor = Executors.newSingleThreadExecutor();
+    private volatile int streamSeq;
+    private volatile boolean streamStarting;
+
     // Авто-восстановление потока: следим за прогрессом и переподключаемся при обрыве.
     private static final long WATCHDOG_MS = 4000L;
     private static final long STALL_MS = 12000L;
@@ -174,12 +182,43 @@ public class PlayerActivity extends BaseActivity {
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);
         osdHandler.removeCallbacks(recoverTask);
-        if (vlcPlayer != null) {
-            vlcPlayer.setEventListener(null);
-            vlcPlayer.stop();
-            vlcPlayer.detachViews();
-            vlcPlayer.release();
-            vlcPlayer = null;
+        releasePlayer();
+    }
+
+    /**
+     * Полный останов плеера. detachViews() трогает SurfaceView, поэтому идёт на главном
+     * потоке, а блокирующие stop()/release() — в потоке streamExecutor.
+     */
+    private void releasePlayer() {
+        final MediaPlayer player = vlcPlayer;
+        if (player == null) {
+            return;
+        }
+        vlcPlayer = null;
+        // Отменяем ещё не выполненные запуски потока.
+        streamSeq++;
+        player.setEventListener(null);
+        try {
+            player.detachViews();
+        } catch (RuntimeException e) {
+            Log.w(TAG, "detachViews: " + e);
+        }
+        try {
+            streamExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        player.stop();
+                    } catch (RuntimeException e) {
+                        Log.w(TAG, "stop: " + e);
+                    }
+                    player.release();
+                }
+            });
+        } catch (RuntimeException e) {
+            // Экран уже уничтожен и очередь закрыта — плеер освободим здесь.
+            Log.w(TAG, "releasePlayer: " + e);
+            player.release();
         }
     }
 
@@ -1387,7 +1426,9 @@ public class PlayerActivity extends BaseActivity {
 
     /** Создаёт поток заново (используется и при старте, и при переподключении). */
     private void startStream() {
-        if (vlcPlayer == null || streamUrl == null) {
+        final MediaPlayer player = vlcPlayer;
+        final LibVLC lib = libVLC;
+        if (player == null || lib == null || streamUrl == null) {
             return;
         }
         // Запоминаем канал, чтобы при следующем входе открыть его сразу (пишем только при смене).
@@ -1401,21 +1442,54 @@ public class PlayerActivity extends BaseActivity {
         buffering.setVisibility(View.VISIBLE);
         errorPanel.setVisibility(View.GONE);
 
-        Media media = new Media(libVLC, Uri.parse(streamUrl));
-        // Аппаратный декодер включаем, но разрешаем автоматический откат к программному —
-        // именно так воспроизводятся каналы в MPEG-2, которые не умеет устройство.
-        media.setHWDecoderEnabled(true, false);
-        // Буфер и авто-переподключение HTTP: сглаживает обрывы и «залипание» живого потока.
-        media.addOption(":network-caching=1000");
-        media.addOption(":live-caching=1000");
-        media.addOption(":http-reconnect=true");
-        // clock-jitter/clock-synchro НЕ отключаем: VLC сам синхронизирует звук и видео.
+        final String url = streamUrl;
+        final int seq = ++streamSeq;
+        streamStarting = true;
+        try {
+            streamExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        // Пока задача стояла в очереди, пользователь выбрал другой канал — она уже не нужна.
+                        if (seq != streamSeq || player != vlcPlayer) {
+                            return;
+                        }
+                        Media media = null;
+                        try {
+                            media = new Media(lib, Uri.parse(url));
+                            // Аппаратный декодер включаем, но разрешаем автоматический откат к программному —
+                            // именно так воспроизводятся каналы в MPEG-2, которые не умеет устройство.
+                            media.setHWDecoderEnabled(true, false);
+                            // Буфер и авто-переподключение HTTP: сглаживает обрывы и «залипание» живого потока.
+                            media.addOption(":network-caching=1000");
+                            media.addOption(":live-caching=1000");
+                            media.addOption(":http-reconnect=true");
+                            // clock-jitter/clock-synchro НЕ отключаем: VLC сам синхронизирует звук и видео.
 
-        // Полный сброс предыдущего потока, иначе после обрыва VLC может остаться в «залипшем» состоянии.
-        vlcPlayer.stop();
-        vlcPlayer.setMedia(media);
-        media.release();
-        vlcPlayer.play();
+                            // Полный сброс предыдущего потока, иначе после обрыва VLC может остаться в «залипшем» состоянии.
+                            player.stop();
+                            if (seq != streamSeq) {
+                                return;
+                            }
+                            player.setMedia(media);
+                        } catch (RuntimeException e) {
+                            Log.w(TAG, "не удалось подготовить поток: " + e);
+                            return;
+                        } finally {
+                            if (media != null) {
+                                media.release();
+                            }
+                        }
+                        player.play();
+                    } finally {
+                        streamStarting = false;
+                    }
+                }
+            });
+        } catch (RuntimeException e) {
+            streamStarting = false;
+            Log.w(TAG, "startStream: " + e);
+        }
     }
 
     /** Переподключение к текущему каналу. Пробуем бесконечно, пауза растёт до 8 секунд. */
@@ -1503,7 +1577,7 @@ public class PlayerActivity extends BaseActivity {
         wantPlay = true;
         osdHandler.removeCallbacks(watchdog);
         osdHandler.postDelayed(watchdog, WATCHDOG_MS);
-        if (vlcPlayer != null && !vlcPlayer.isPlaying()) {
+        if (vlcPlayer != null && !streamStarting && !vlcPlayer.isPlaying()) {
             vlcPlayer.play();
         }
         // Автопроверка новых релизов на GitHub (не чаще раза в 6 часов).
@@ -1538,17 +1612,24 @@ public class PlayerActivity extends BaseActivity {
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);
         osdHandler.removeCallbacks(recoverTask);
-        if (vlcPlayer != null) {
-            vlcPlayer.setEventListener(null);
-            vlcPlayer.stop();
-            vlcPlayer.detachViews();
-            vlcPlayer.release();
-            vlcPlayer = null;
+        releasePlayer();
+        final LibVLC lib = libVLC;
+        libVLC = null;
+        if (lib != null) {
+            // Освобождаем libVLC после задач плеера — они в одной очереди streamExecutor.
+            try {
+                streamExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        lib.release();
+                    }
+                });
+            } catch (RuntimeException e) {
+                Log.w(TAG, "libVLC release: " + e);
+                lib.release();
+            }
         }
-        if (libVLC != null) {
-            libVLC.release();
-            libVLC = null;
-        }
+        streamExecutor.shutdown();
         super.onDestroy();
     }
 }

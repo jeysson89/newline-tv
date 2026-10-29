@@ -57,7 +57,8 @@
             android:name=".SettingsActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
-            android:label="@string/settings_title" />
+            android:label="@string/settings_title"
+            android:theme="@style/Theme.Newline.Settings" />
 
         <!-- Раздача скачанного APK системному установщику -->
         <provider

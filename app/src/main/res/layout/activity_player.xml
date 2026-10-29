@@ -191,22 +191,38 @@
                 android:paddingRight="16dp"
                 android:paddingBottom="16dp">
 
-                <TextView
+                <!--
+                    Заголовок и подсказка стоят друг под другом: в узкой панели
+                    на телефоне они в одну строку не влезали — «Каналы» рвалось
+                    на два ряда, а подсказка заезжала под кольцо фокуса шестерни.
+                -->
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="@string/player_channels_title"
-                    android:textColor="@color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
+                    android:orientation="vertical">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="12dp"
-                    android:text="@string/player_channels_hint"
-                    android:textColor="#CCFFFFFF"
-                    android:textSize="13sp" />
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:text="@string/player_channels_title"
+                        android:textColor="@color/white"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:text="@string/player_channels_hint"
+                        android:textColor="#CCFFFFFF"
+                        android:textSize="13sp" />
+
+                </LinearLayout>
 
                 <ImageButton
                     android:id="@+id/btnPanelSettings"

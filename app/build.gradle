@@ -12,8 +12,8 @@ if (hasReleaseKey) {
 
 // Версию можно переопределить для тестовых сборок:
 // .\gradlew.bat assembleRelease -PappVersionCode=1 -PappVersionName=1.0.0
-def appVersionCode = (project.findProperty('appVersionCode') ?: '8').toInteger()
-def appVersionName = project.findProperty('appVersionName') ?: '1.3.3'
+def appVersionCode = (project.findProperty('appVersionCode') ?: '9').toInteger()
+def appVersionName = project.findProperty('appVersionName') ?: '1.3.4'
 
 android {
     namespace 'com.newline.tv'

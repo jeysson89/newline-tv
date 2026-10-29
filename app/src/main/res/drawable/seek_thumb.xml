@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ползунок настроек. Раньше использовался стандартный AppCompat-бегунок с
+    ripple: при переходе фокуса пультом вокруг него вспыхивал серый круг —
+    на тёмной теме это выглядело как засветка. Теперь бегунок простой,
+    а фокус виден по рамке строки и светлому ободу самого кружка.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <size
+                android:width="20dp"
+                android:height="20dp" />
+            <solid android:color="@color/brand_red" />
+            <stroke
+                android:width="2dp"
+                android:color="@color/text_primary" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="oval">
+            <size
+                android:width="20dp"
+                android:height="20dp" />
+            <solid android:color="@color/brand_red" />
+            <stroke
+                android:width="2dp"
+                android:color="@color/brand_red" />
+        </shape>
+    </item>
+
+</selector>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Кнопка «Применить». Своя рамка фокуса: системная подсветка нажатия в
+    настройках отключена, иначе при переходе пультом по экрану вспыхивали
+    светлые пятна.
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/brand_red" />
+            <corners android:radius="8dp" />
+            <stroke
+                android:width="3dp"
+                android:color="@color/text_primary" />
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/brand_dark" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/brand_red" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+
+</selector>

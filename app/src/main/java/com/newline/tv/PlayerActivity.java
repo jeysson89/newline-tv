@@ -6,9 +6,12 @@ import android.content.Intent;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
+import android.net.TrafficStats;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
+import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
@@ -41,6 +44,7 @@ import com.newline.tv.update.UpdateManager;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
+import org.videolan.libvlc.interfaces.IMedia;
 import org.videolan.libvlc.util.VLCVideoLayout;
 
 import java.io.IOException;
@@ -48,6 +52,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -70,6 +75,7 @@ public class PlayerActivity extends BaseActivity {
     private View errorPanel;
     private TextView errorText;
     private TextView formatNotice;
+    private TextView statsChip;
     private View topBar;
     private TextView channelTitle;
     private TextView channelCounter;
@@ -89,6 +95,21 @@ public class PlayerActivity extends BaseActivity {
     /** Диалог «Выйти или настройки», чтобы не открывать его дважды. */
     private Dialog exitDialog;
 
+    // Индикатор потока: мини-кнопка под видео и диалог с подробностями.
+    private boolean statsEnabled;
+    private Dialog statsDialog;
+    private TextView statsBody;
+    private final Handler statsHandler = new Handler(Looper.getMainLooper());
+    /** Принято байт приложением — по разнице считаем реальный сетевой битрейт. */
+    private long statsLastRxBytes = -1;
+    private long statsRxAt;
+    private long statsBitrateBps;
+    private int statsLostPictures;
+    private int statsCorrupted;
+    private int statsDiscontinuity;
+    private int statsDisplayedPictures;
+    private static final long STATS_INTERVAL_MS = 1000L;
+
     private String streamUrl;
     private String channelName;
     /** URL, уже сохранённый как «последний канал» — чтобы не писать в настройки повторно. */
@@ -98,6 +119,8 @@ public class PlayerActivity extends BaseActivity {
     private int channelIndex = -1;
     /** Масштаб текста, с которым создан экран: при изменении пересоздаём активность. */
     private float appliedFontScale;
+    /** Тема, с которой создан экран: после настроек могла смениться. */
+    private boolean appliedDarkTheme;
 
     private List<EpgProgram> epg;
     /** Открытая телепрограмма: пока EPG грузится, диалог показывает ожидание. */
@@ -181,6 +204,11 @@ public class PlayerActivity extends BaseActivity {
         super.onStop();
         dismissEpgDialog();
         dismissExitDialog();
+        dismissStatsDialog();
+        stopStatsUpdates();
+        if (statsChip != null) {
+            statsChip.setVisibility(View.GONE);
+        }
         // Уходя с экрана, полностью отпускаем медиаплеер: его поверхность всё равно разрушается.
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);
@@ -300,6 +328,7 @@ public class PlayerActivity extends BaseActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         appliedFontScale = Settings.getFontScale(this);
+        appliedDarkTheme = Settings.isDarkEffective(this);
         setContentView(R.layout.activity_player);
 
         videoLayout = findViewById(R.id.videoLayout);
@@ -307,6 +336,16 @@ public class PlayerActivity extends BaseActivity {
         errorPanel = findViewById(R.id.errorPanel);
         errorText = findViewById(R.id.errorText);
         formatNotice = findViewById(R.id.formatNotice);
+        statsChip = findViewById(R.id.statsChip);
+        statsEnabled = Settings.isStreamStatsEnabled(this);
+        if (statsChip != null) {
+            statsChip.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showStatsDialog();
+                }
+            });
+        }
         topBar = findViewById(R.id.topBar);
         channelTitle = findViewById(R.id.channelTitle);
         channelCounter = findViewById(R.id.channelCounter);
@@ -760,7 +799,8 @@ public class PlayerActivity extends BaseActivity {
                     (int) (420f * metrics.density));
             // Непрозрачный фон: иначе видео просвечивает сквозь текст диалога.
             window.setFormat(PixelFormat.OPAQUE);
-            window.setBackgroundDrawable(new ColorDrawable(0xFF0B0D10));
+            window.setBackgroundDrawable(
+                    new ColorDrawable(ContextCompat.getColor(this, R.color.dialog_bg)));
             window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
             window.setGravity(Gravity.CENTER);
             WindowManager.LayoutParams params = window.getAttributes();
@@ -864,7 +904,8 @@ public class PlayerActivity extends BaseActivity {
             // Окно делаем непрозрачным: иначе SurfaceView с видео просвечивает
             // сквозь диалог и на части телевизоров картинка мерцает.
             window.setFormat(PixelFormat.OPAQUE);
-            window.setBackgroundDrawable(new ColorDrawable(0xFF0B0D10));
+            window.setBackgroundDrawable(
+                    new ColorDrawable(ContextCompat.getColor(this, R.color.dialog_bg)));
             window.setLayout(width, height);
             window.setGravity(Gravity.CENTER);
             WindowManager.LayoutParams params = window.getAttributes();
@@ -942,6 +983,265 @@ public class PlayerActivity extends BaseActivity {
     private void dismissExitDialog() {
         if (exitDialog != null) {
             exitDialog.dismiss();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Индикатор потока: мини-кнопка под видео и подробности по нажатию.
+    // ---------------------------------------------------------------------
+
+    private final Runnable statsTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!statsEnabled) {
+                return;
+            }
+            updateStreamStats();
+            statsHandler.postDelayed(this, STATS_INTERVAL_MS);
+        }
+    };
+
+    private void startStatsUpdates() {
+        if (!statsEnabled || statsChip == null) {
+            return;
+        }
+        statsHandler.removeCallbacks(statsTick);
+        statsHandler.post(statsTick);
+    }
+
+    private void stopStatsUpdates() {
+        statsHandler.removeCallbacks(statsTick);
+    }
+
+    private void resetStatsBaseline() {
+        statsLastRxBytes = -1;
+        statsRxAt = 0;
+        statsRxAt = 0;
+        statsBitrateBps = 0;
+        statsLostPictures = 0;
+        statsCorrupted = 0;
+        statsDiscontinuity = 0;
+        statsDisplayedPictures = 0;
+    }
+
+    /** Раз в секунду снимает с плеера разрешение, битрейт, протокол и потери. */
+    private void updateStreamStats() {
+        if (!statsEnabled || statsChip == null) {
+            return;
+        }
+        MediaPlayer player = vlcPlayer;
+        if (player == null) {
+            statsChip.setVisibility(View.GONE);
+            return;
+        }
+
+        IMedia.VideoTrack track = null;
+        IMedia.Stats stats = null;
+        try {
+            track = findVideoTrack(player);
+            IMedia media = player.getMedia();
+            stats = media == null ? null : media.getStats();
+        } catch (RuntimeException e) {
+            Log.w(TAG, "stats: " + e);
+        }
+
+        int width = track == null ? 0 : track.width;
+        int height = track == null ? 0 : track.height;
+        String codec = track == null ? null : track.codec;
+
+        if (stats != null) {
+            long now = SystemClock.elapsedRealtime();
+            // Реальный сетевой битрейт считаем по трафику приложения: статистика
+            // самого медиа в libVLC для HLS показывает только служебные запросы.
+            // HLS отдаёт сегменты «пачками», поэтому усредняем за 8 секунд —
+            // иначе в окне между сегментами битрейт падает почти до нуля.
+            long rx = TrafficStats.getUidRxBytes(Process.myUid());
+            if (rx != TrafficStats.UNSUPPORTED && rx >= 0) {
+                if (statsLastRxBytes < 0) {
+                    statsLastRxBytes = rx;
+                    statsRxAt = now;
+                } else if (now - statsRxAt >= 8000L) {
+                    long delta = rx >= statsLastRxBytes ? rx - statsLastRxBytes : 0;
+                    long elapsed = now - statsRxAt;
+                    statsBitrateBps = delta > 0 ? delta * 8000L / elapsed : 0;
+                    statsLastRxBytes = rx;
+                    statsRxAt = now;
+                }
+            }
+            // Счётчики декодера нужны для потерь: они живут на объекте медиа.
+            statsDisplayedPictures = Math.max(0, stats.displayedPictures);
+            statsLostPictures = Math.max(0, stats.lostPictures);
+            statsCorrupted = Math.max(0, stats.demuxCorrupted);
+            statsDiscontinuity = Math.max(0, stats.demuxDiscontinuity);
+        }
+
+        String resolution = width > 0 && height > 0
+                ? getString(R.string.stats_resolution_value, width, height)
+                : getString(R.string.stats_unknown);
+        String bitrate = formatBitrate(statsBitrateBps);
+        String protocol = protocolLabel();
+
+        statsChip.setText(statsLossesKnown() && statsLostPictures > 0
+                ? getString(R.string.stats_chip_losses, resolution, bitrate, protocol,
+                statsLostPictures)
+                : getString(R.string.stats_chip, resolution, bitrate, protocol));
+        if (statsChip.getVisibility() != View.VISIBLE
+                && channelPanel.getVisibility() != View.VISIBLE) {
+            statsChip.setVisibility(View.VISIBLE);
+        }
+
+        if (statsDialog != null && statsDialog.isShowing() && statsBody != null) {
+            statsBody.setText(buildStatsText(resolution, bitrate, protocol, codec));
+        }
+    }
+
+    private String formatBitrate(long bps) {
+        if (bps <= 0) {
+            return getString(R.string.stats_unknown);
+        }
+        if (bps >= 1000000L) {
+            String value = String.format(Locale.US, "%.1f", bps / 1000000f).replace('.', ',');
+            return getString(R.string.stats_bitrate_mbps, value);
+        }
+        return getString(R.string.stats_bitrate_kbps, Math.max(1, Math.round(bps / 1000f)));
+    }
+
+    /** Выбранная видеодорожка: у HLS варианты потока идут отдельными дорожками. */
+    private IMedia.VideoTrack findVideoTrack(MediaPlayer player) {
+        IMedia media = player.getMedia();
+        if (media == null) {
+            return player.getCurrentVideoTrack();
+        }
+        int selected = player.getVideoTrack();
+        IMedia.VideoTrack first = null;
+        IMedia.VideoTrack selectedTrack = null;
+        int count = media.getTrackCount();
+        for (int i = 0; i < count; i++) {
+            IMedia.Track track = media.getTrack(i);
+            if (!(track instanceof IMedia.VideoTrack)) {
+                continue;
+            }
+            IMedia.VideoTrack video = (IMedia.VideoTrack) track;
+            if (first == null) {
+                first = video;
+            }
+            if (video.id == selected) {
+                selectedTrack = video;
+            }
+        }
+        if (selectedTrack != null && selectedTrack.width > 0 && selectedTrack.height > 0) {
+            return selectedTrack;
+        }
+        if (first != null && first.width > 0 && first.height > 0) {
+            return first;
+        }
+        return selectedTrack != null ? selectedTrack : first;
+    }
+
+    private String protocolLabel() {
+        if (streamUrl == null || streamUrl.trim().isEmpty()) {
+            return getString(R.string.stats_unknown);
+        }
+        String url = streamUrl.toLowerCase(Locale.US);
+        if (url.contains(".m3u8")) {
+            return getString(R.string.stats_protocol_hls);
+        }
+        String scheme = Uri.parse(streamUrl).getScheme();
+        if (scheme == null || scheme.isEmpty()) {
+            return getString(R.string.stats_unknown);
+        }
+        return scheme.toUpperCase(Locale.US);
+    }
+
+    private String buildStatsText(String resolution, String bitrate, String protocol,
+                                  String codec) {
+        StringBuilder text = new StringBuilder();
+        text.append(getString(R.string.stats_channel)).append(": ")
+                .append(channelName == null ? "" : channelName);
+        text.append('\n').append(getString(R.string.stats_resolution)).append(": ")
+                .append(resolution);
+        text.append('\n').append(getString(R.string.stats_bitrate)).append(": ")
+                .append(bitrate);
+        text.append('\n').append(getString(R.string.stats_protocol)).append(": ")
+                .append(protocol);
+        text.append('\n').append(getString(R.string.stats_codec)).append(": ")
+                .append(codec == null || codec.isEmpty()
+                        ? getString(R.string.stats_unknown) : codec);
+        text.append('\n').append(getString(R.string.stats_losses)).append(": ")
+                .append(statsLossesKnown()
+                        ? getString(R.string.stats_losses_value, statsLostPictures,
+                        statsCorrupted, statsDiscontinuity)
+                        : getString(R.string.stats_unknown));
+        text.append('\n').append(getString(R.string.stats_reconnects)).append(": ")
+                .append(reconnect);
+        return text.toString();
+    }
+
+    /** Счётчики декодера доступны не для всех потоков: тогда потери честно прочерк. */
+    private boolean statsLossesKnown() {
+        return statsDisplayedPictures > 0 || statsLostPictures > 0;
+    }
+
+    private void showStatsDialog() {
+        if (!statsEnabled) {
+            return;
+        }
+        if (statsDialog != null && statsDialog.isShowing()) {
+            return;
+        }
+
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_stats);
+        dialog.setCanceledOnTouchOutside(true);
+        statsDialog = dialog;
+        statsBody = dialog.findViewById(R.id.statsBody);
+        View close = dialog.findViewById(R.id.statsClose);
+
+        close.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+            }
+        });
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface d) {
+                if (statsDialog == dialog) {
+                    statsDialog = null;
+                    statsBody = null;
+                }
+            }
+        });
+
+        dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int width = Math.min((int) (metrics.widthPixels * 0.9f),
+                    (int) (460f * metrics.density));
+            window.setFormat(PixelFormat.OPAQUE);
+            window.setBackgroundDrawable(
+                    new ColorDrawable(ContextCompat.getColor(this, R.color.dialog_bg)));
+            window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+            window.setGravity(Gravity.CENTER);
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.dimAmount = 0.65f;
+            window.setAttributes(params);
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
+
+        updateStreamStats();
+        close.requestFocus();
+    }
+
+    /** Закрыть параметры потока (например, при уходе с экрана). */
+    private void dismissStatsDialog() {
+        if (statsDialog != null) {
+            statsDialog.dismiss();
+            statsDialog = null;
+            statsBody = null;
         }
     }
 
@@ -1131,6 +1431,14 @@ public class PlayerActivity extends BaseActivity {
             if (code == KeyEvent.KEYCODE_MENU) {
                 if (channelPanel.getVisibility() != View.VISIBLE) {
                     showChannelPanel();
+                }
+                return true;
+            }
+
+            // INFO открывает подробности потока, если индикатор включён в настройках.
+            if (code == KeyEvent.KEYCODE_INFO) {
+                if (statsEnabled) {
+                    showStatsDialog();
                 }
                 return true;
             }
@@ -1339,6 +1647,9 @@ public class PlayerActivity extends BaseActivity {
         applyChannelView();
         applyPanelScrim();
         topBar.setVisibility(View.GONE);
+        if (statsChip != null) {
+            statsChip.setVisibility(View.GONE);
+        }
         osdHandler.removeCallbacks(hideOsd);
         channelAdapter.setItems(channels);
         channelPanel.setVisibility(View.VISIBLE);
@@ -1404,6 +1715,11 @@ public class PlayerActivity extends BaseActivity {
     private void hideChannelPanel() {
         panelHeaderFocus = false;
         channelPanel.setVisibility(View.GONE);
+        if (statsChip != null && statsEnabled && vlcPlayer != null
+                && vlcPlayer.isPlaying()) {
+            statsChip.setVisibility(View.VISIBLE);
+            updateStreamStats();
+        }
     }
 
     /** Применяет выбранную в настройках прозрачность фона списка каналов. */
@@ -1500,6 +1816,7 @@ public class PlayerActivity extends BaseActivity {
         healthyFrom = 0;
         videoOutputStarted = false;
         wantPlay = true;
+        resetStatsBaseline();
         if (formatNotice != null) {
             formatNotice.setVisibility(View.GONE);
         }
@@ -1587,6 +1904,9 @@ public class PlayerActivity extends BaseActivity {
         // Пока идёт восстановление, показываем статус вместо «мёртвой» панели ошибки.
         errorPanel.setVisibility(View.GONE);
         buffering.setVisibility(View.VISIBLE);
+        if (statsChip != null) {
+            statsChip.setVisibility(View.GONE);
+        }
         formatNotice.setText(reconnect > 10 ? R.string.player_stream_lost : R.string.player_reconnecting);
         formatNotice.setVisibility(View.VISIBLE);
 
@@ -1609,6 +1929,9 @@ public class PlayerActivity extends BaseActivity {
                 errorPanel.setVisibility(View.GONE);
                 osdHandler.removeCallbacks(videoCheck);
                 osdHandler.postDelayed(videoCheck, VIDEO_CHECK_MS);
+                if (statsEnabled) {
+                    startStatsUpdates();
+                }
                 break;
             case MediaPlayer.Event.Vout:
                 if (event.getVoutCount() > 0) {
@@ -1621,10 +1944,12 @@ public class PlayerActivity extends BaseActivity {
             case MediaPlayer.Event.EndReached:
                 // Для «живого» канала конец потока означает обрыв — переподключаемся.
                 Log.w(TAG, "поток завершился, переподключение: " + channelName);
+                stopStatsUpdates();
                 recover();
                 break;
             case MediaPlayer.Event.EncounteredError:
                 buffering.setVisibility(View.GONE);
+                stopStatsUpdates();
                 Log.e(TAG, "VLC error on " + channelName + " (" + streamUrl + ")");
                 osdHandler.removeCallbacks(videoCheck);
                 recover();
@@ -1647,6 +1972,12 @@ public class PlayerActivity extends BaseActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Тема тоже применяется пересозданием: иначе карточки каналов и
+        // диалоги останутся в цветах прошлой темы до перезапуска приложения.
+        if (Settings.isDarkEffective(this) != appliedDarkTheme) {
+            recreate();
+            return;
+        }
         // Масштаб текста применяется пересозданием экрана с новым контекстом:
         // иначе OSD и диалог телепрограммы останутся в старом размере.
         if (Math.abs(Settings.getFontScale(this) - appliedFontScale) > 0.005f) {
@@ -1656,6 +1987,22 @@ public class PlayerActivity extends BaseActivity {
         hideSystemUi();
         applyPanelScrim();
         applyChannelView();
+        // Настройки могли изменить индикатор потока: перечитываем перед возвратом к видео.
+        statsEnabled = Settings.isStreamStatsEnabled(this);
+        if (statsEnabled) {
+            if (vlcPlayer != null && vlcPlayer.isPlaying()) {
+                startStatsUpdates();
+                if (statsChip != null && channelPanel.getVisibility() != View.VISIBLE) {
+                    statsChip.setVisibility(View.VISIBLE);
+                }
+            }
+        } else {
+            stopStatsUpdates();
+            dismissStatsDialog();
+            if (statsChip != null) {
+                statsChip.setVisibility(View.GONE);
+            }
+        }
         wantPlay = true;
         osdHandler.removeCallbacks(watchdog);
         osdHandler.postDelayed(watchdog, WATCHDOG_MS);
@@ -1690,6 +2037,7 @@ public class PlayerActivity extends BaseActivity {
         epgPool.shutdownNow();
         panelEpgPool.shutdownNow();
         epgPollHandler.removeCallbacks(epgPoll);
+        statsHandler.removeCallbacks(statsTick);
         osdHandler.removeCallbacks(hideOsd);
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);

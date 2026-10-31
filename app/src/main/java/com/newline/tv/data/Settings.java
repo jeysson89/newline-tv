@@ -28,6 +28,7 @@ public final class Settings {
     private static final String KEY_LAST_CHANNEL_NAME = "last_channel_name";
     private static final String KEY_PANEL_ENABLED = "panel_enabled";
     private static final String KEY_PANEL_TRANSPARENCY = "panel_transparency";
+    private static final String KEY_STREAM_STATS = "stream_stats";
     private static final String KEY_CHANNEL_VIEW = "channel_view";
     private static final String KEY_LAST_UPDATE_CHECK = "last_update_check";
     private static final String KEY_LAST_UPDATE_ATTEMPT = "last_update_attempt";
@@ -104,6 +105,15 @@ public final class Settings {
     public static void setPanelTransparency(Context context, int percent) {
         int value = Math.max(PANEL_TRANSPARENCY_MIN, Math.min(PANEL_TRANSPARENCY_MAX, percent));
         prefs(context).edit().putInt(KEY_PANEL_TRANSPARENCY, value).apply();
+    }
+
+    /** Индикатор потока под видео: разрешение, битрейт, протокол, потери. По умолчанию выключен. */
+    public static boolean isStreamStatsEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_STREAM_STATS, false);
+    }
+
+    public static void setStreamStatsEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_STREAM_STATS, enabled).apply();
     }
 
     /** Выбранный вид списка каналов: «Плитки» или «Список». По умолчанию — строки. */

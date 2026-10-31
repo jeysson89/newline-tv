@@ -3,17 +3,17 @@
 
     <item android:state_focused="true">
         <shape android:shape="rectangle">
-            <solid android:color="#2A3038" />
+            <solid android:color="@color/dialog_button_bg" />
             <corners android:radius="12dp" />
             <stroke
                 android:width="2dp"
-                android:color="#FFFFFF" />
+                android:color="@color/dialog_focus_ring" />
         </shape>
     </item>
 
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#2A3038" />
+            <solid android:color="@color/dialog_button_bg" />
             <corners android:radius="12dp" />
         </shape>
     </item>

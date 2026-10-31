@@ -36,6 +36,7 @@ public class SettingsActivity extends BaseActivity {
     private SwitchCompat panelSwitch;
     private SeekBar panelSeek;
     private TextView panelValue;
+    private SwitchCompat statsSwitch;
     private View btnViewCards;
     private View btnViewList;
     private TextView updateVersion;
@@ -81,6 +82,7 @@ public class SettingsActivity extends BaseActivity {
         panelSwitch = findViewById(R.id.panelSwitch);
         panelSeek = findViewById(R.id.panelSeek);
         panelValue = findViewById(R.id.panelValue);
+        statsSwitch = findViewById(R.id.statsSwitch);
         btnViewCards = findViewById(R.id.btnViewCards);
         btnViewList = findViewById(R.id.btnViewList);
         updateVersion = findViewById(R.id.updateVersion);
@@ -94,6 +96,7 @@ public class SettingsActivity extends BaseActivity {
 
         panelSwitch.setChecked(Settings.isPanelEnabled(this));
         panelSeek.setProgress(Settings.getPanelTransparency(this));
+        statsSwitch.setChecked(Settings.isStreamStatsEnabled(this));
 
         updateSourceUi();
         updateViewUi();
@@ -307,6 +310,7 @@ public class SettingsActivity extends BaseActivity {
         Settings.setEpgFontScale(this, scaleFor(epgScaleSeek.getProgress()));
         Settings.setPanelEnabled(this, panelSwitch.isChecked());
         Settings.setPanelTransparency(this, panelSeek.getProgress());
+        Settings.setStreamStatsEnabled(this, statsSwitch.isChecked());
         Settings.setChannelView(this, channelView);
 
         if (sourceChanged) {

@@ -17,7 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/exit_dialog_title"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/dialog_text_primary"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -26,7 +26,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:text="@string/exit_dialog_hint"
-        android:textColor="#9AA0A6"
+        android:textColor="@color/dialog_text_secondary"
         android:textSize="14sp" />
 
     <Button
@@ -39,7 +39,7 @@
         android:focusableInTouchMode="true"
         android:text="@string/exit_dialog_exit"
         android:textAllCaps="false"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/dialog_primary_text"
         android:textSize="17sp"
         android:textStyle="bold" />
 
@@ -53,7 +53,7 @@
         android:focusableInTouchMode="true"
         android:text="@string/settings_title"
         android:textAllCaps="false"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/dialog_button_text"
         android:textSize="17sp" />
 
 </LinearLayout>

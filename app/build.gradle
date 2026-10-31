@@ -12,12 +12,14 @@ if (hasReleaseKey) {
 
 // Версию можно переопределить для тестовых сборок:
 // .\gradlew.bat assembleRelease -PappVersionCode=1 -PappVersionName=1.0.0
-def appVersionCode = (project.findProperty('appVersionCode') ?: '10').toInteger()
-def appVersionName = project.findProperty('appVersionName') ?: '1.3.5'
+def appVersionCode = (project.findProperty('appVersionCode') ?: '11').toInteger()
+def appVersionName = project.findProperty('appVersionName') ?: '1.3.6'
 
 android {
     namespace 'com.newline.tv'
-    compileSdk 34
+    compileSdk 36
+    // libVLC 3.7.7 собран под API 36; целевую платформу (targetSdk) не меняем.
+    buildToolsVersion '36.0.0'
 
     defaultConfig {
         applicationId 'com.newline.tv'
@@ -79,5 +81,5 @@ dependencies {
 
     // libVLC: собственный медиадвижок с программными декодерами (MPEG-2, MPEG-4, H.264/HEVC и др.),
     // поэтому каналы оператора воспроизводятся независимо от аппаратных кодеков устройства.
-    implementation 'org.videolan.android:libvlc-all:3.7.2'
+    implementation 'org.videolan.android:libvlc-all:3.7.7'
 }

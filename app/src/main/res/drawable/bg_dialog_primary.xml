@@ -8,7 +8,7 @@
             <corners android:radius="12dp" />
             <stroke
                 android:width="3dp"
-                android:color="#FFFFFF" />
+                android:color="@color/dialog_primary_focus" />
         </shape>
     </item>
 

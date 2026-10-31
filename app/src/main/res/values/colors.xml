@@ -25,4 +25,16 @@
 
     <color name="status_bar">#FFFFFF</color>
     <color name="nav_bar">#FFFFFF</color>
+
+    <!-- Диалоги (выход, телепрограмма, параметры потока) следуют теме приложения -->
+    <color name="dialog_bg">#FFFFFF</color>
+    <color name="dialog_text_primary">#181818</color>
+    <color name="dialog_text_secondary">#6B7480</color>
+    <color name="dialog_divider">#E4E8EE</color>
+    <color name="dialog_button_bg">#F1F3F6</color>
+    <color name="dialog_button_text">#181818</color>
+    <color name="dialog_focus_ring">#E00010</color>
+    <color name="dialog_primary_focus">#FFFFFF</color>
+    <color name="dialog_primary_text">#FFFFFF</color>
+    <color name="dialog_current_bg">#FFF3D6</color>
 </resources>

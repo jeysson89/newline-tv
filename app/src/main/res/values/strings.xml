@@ -28,6 +28,9 @@
     <string name="settings_panel_enabled">Открывать по кнопке «Назад»</string>
     <string name="settings_panel_enabled_hint">Видео продолжает воспроизводиться, список появляется полупрозрачным</string>
     <string name="settings_panel_transparency">Прозрачность фона</string>
+    <string name="settings_stream_stats">Индикатор потока</string>
+    <string name="settings_stream_stats_enabled">Показывать параметры потока</string>
+    <string name="settings_stream_stats_hint">Мини-кнопка под видео: разрешение, битрейт, протокол и потери. Нажмите на неё — подробности</string>
     <string name="settings_channel_view">Вид списка каналов</string>
     <string name="settings_channel_view_cards">Плитки</string>
     <string name="settings_channel_view_list">Список</string>
@@ -60,6 +63,24 @@
     <string name="player_stream_lost">Поток потерян. Проверьте соединение с интернетом.</string>
     <string name="player_channels_title">Каналы</string>
     <string name="player_channels_hint">◀ — настройки, Назад — закрыть</string>
+
+    <!-- Индикатор потока под видео -->
+    <string name="stats_title">Параметры потока</string>
+    <string name="stats_channel">Канал</string>
+    <string name="stats_resolution">Разрешение</string>
+    <string name="stats_bitrate">Битрейт</string>
+    <string name="stats_protocol">Протокол</string>
+    <string name="stats_codec">Кодек</string>
+    <string name="stats_losses">Потери</string>
+    <string name="stats_reconnects">Переподключения</string>
+    <string name="stats_unknown">—</string>
+    <string name="stats_chip">%1$s · %2$s · %3$s</string>
+    <string name="stats_chip_losses">%1$s · %2$s · %3$s · потери %4$d</string>
+    <string name="stats_resolution_value">%1$d×%2$d</string>
+    <string name="stats_bitrate_mbps">%1$s Мбит/с</string>
+    <string name="stats_bitrate_kbps">%1$d кбит/с</string>
+    <string name="stats_losses_value">кадры %1$d · повреждено %2$d · разрывы %3$d</string>
+    <string name="stats_protocol_hls">HLS</string>
 
     <!-- Вопрос при выходе из приложения -->
     <string name="exit_dialog_title">Выйти из приложения?</string>

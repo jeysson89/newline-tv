@@ -24,6 +24,9 @@
     <dimen name="channel_compact_name_size">16sp</dimen>
     <dimen name="channel_now_size">12sp</dimen>
 
+    <!-- Отступ списка от шапки панели: первая карточка не липнет к заголовку -->
+    <dimen name="channel_list_top_padding">24dp</dimen>
+
     <dimen name="header_logo_width">150dp</dimen>
     <dimen name="header_logo_height">52dp</dimen>
     <dimen name="counter_size">14sp</dimen>

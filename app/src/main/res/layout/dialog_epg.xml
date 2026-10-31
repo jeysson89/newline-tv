@@ -15,7 +15,7 @@
         android:layout_height="wrap_content"
         android:ellipsize="end"
         android:singleLine="true"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/dialog_text_primary"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -24,7 +24,7 @@
         android:layout_height="1dp"
         android:layout_marginTop="12dp"
         android:layout_marginBottom="4dp"
-        android:background="#26FFFFFF" />
+        android:background="@color/dialog_divider" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/epgList"
@@ -44,7 +44,7 @@
         android:layout_weight="1"
         android:gravity="center"
         android:text="@string/player_epg_loading"
-        android:textColor="#9AA0A6"
+        android:textColor="@color/dialog_text_secondary"
         android:textSize="16sp"
         android:visibility="gone" />
 
@@ -58,7 +58,7 @@
         android:focusableInTouchMode="true"
         android:text="@string/settings_close"
         android:textAllCaps="false"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/dialog_button_text"
         android:textSize="17sp" />
 
 </LinearLayout>

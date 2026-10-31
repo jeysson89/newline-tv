@@ -129,6 +129,29 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <!-- Мини-кнопка параметров потока: включается в настройках, по умолчанию скрыта. -->
+    <TextView
+        android:id="@+id/statsChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_stats_chip"
+        android:clickable="true"
+        android:contentDescription="@string/stats_title"
+        android:ellipsize="end"
+        android:focusable="false"
+        android:maxWidth="520dp"
+        android:paddingLeft="12dp"
+        android:paddingTop="7dp"
+        android:paddingRight="12dp"
+        android:paddingBottom="7dp"
+        android:singleLine="true"
+        android:textColor="@color/white"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <ProgressBar
         android:id="@+id/buffering"
         android:layout_width="48dp"
@@ -242,11 +265,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:clipToPadding="false"
+                android:clipToPadding="true"
                 android:descendantFocusability="afterDescendants"
                 android:focusable="true"
                 android:focusableInTouchMode="true"
-                android:padding="@dimen/grid_padding"
+                android:paddingLeft="@dimen/grid_padding"
+                android:paddingTop="@dimen/channel_list_top_padding"
+                android:paddingRight="@dimen/grid_padding"
+                android:paddingBottom="@dimen/grid_padding"
                 android:scrollbars="none" />
 
         </LinearLayout>

@@ -86,6 +86,8 @@ public class PlayerActivity extends BaseActivity {
     private boolean overlayShownOnce;
     /** Текущий вид списка (null — ещё не применяли). */
     private Boolean panelCompact;
+    /** Диалог «Выйти или настройки», чтобы не открывать его дважды. */
+    private Dialog exitDialog;
 
     private String streamUrl;
     private String channelName;
@@ -178,6 +180,7 @@ public class PlayerActivity extends BaseActivity {
     protected void onStop() {
         super.onStop();
         dismissEpgDialog();
+        dismissExitDialog();
         // Уходя с экрана, полностью отпускаем медиаплеер: его поверхность всё равно разрушается.
         osdHandler.removeCallbacks(videoCheck);
         osdHandler.removeCallbacks(watchdog);
@@ -198,6 +201,13 @@ public class PlayerActivity extends BaseActivity {
         // Отменяем ещё не выполненные запуски потока.
         streamSeq++;
         player.setEventListener(null);
+        // Глушим звук сразу: stop() у libVLC может ждать закрытия сетевого потока
+        // несколько секунд, и без этого звук канала продолжал бы играть поверх настроек.
+        try {
+            player.setVolume(0);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "setVolume(0): " + e);
+        }
         try {
             player.detachViews();
         } catch (RuntimeException e) {
@@ -699,6 +709,70 @@ public class PlayerActivity extends BaseActivity {
         return channel.url + "\n" + channel.name;
     }
 
+    /**
+     * Вопрос при выходе: «Назад» в плеере, когда панель каналов уже закрыта.
+     * Раньше приложение закрывалось сразу — теперь спрашиваем, выйти или
+     * открыть настройки (пультом: вверх/вниз — выбор, ОК — подтвердить).
+     */
+    private void showExitDialog() {
+        if (exitDialog != null && exitDialog.isShowing()) {
+            return;
+        }
+
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_exit);
+        dialog.setCanceledOnTouchOutside(true);
+        exitDialog = dialog;
+
+        View exit = dialog.findViewById(R.id.exitExit);
+        View settings = dialog.findViewById(R.id.exitSettings);
+
+        exit.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                finishAffinity();
+            }
+        });
+        settings.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dialog.dismiss();
+                startActivity(new Intent(PlayerActivity.this, SettingsActivity.class));
+            }
+        });
+        dialog.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override
+            public void onDismiss(DialogInterface d) {
+                if (exitDialog == dialog) {
+                    exitDialog = null;
+                }
+            }
+        });
+
+        dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            DisplayMetrics metrics = getResources().getDisplayMetrics();
+            int width = Math.min((int) (metrics.widthPixels * 0.9f),
+                    (int) (420f * metrics.density));
+            // Непрозрачный фон: иначе видео просвечивает сквозь текст диалога.
+            window.setFormat(PixelFormat.OPAQUE);
+            window.setBackgroundDrawable(new ColorDrawable(0xFF0B0D10));
+            window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+            window.setGravity(Gravity.CENTER);
+            WindowManager.LayoutParams params = window.getAttributes();
+            params.dimAmount = 0.7f;
+            window.setAttributes(params);
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
+
+        // Фокус сразу на «Выйти»: так пультом достаточно нажать ОК.
+        exit.requestFocus();
+    }
+
     private void showProgramDialog() {
         if (epgDialog != null && epgDialog.isShowing()) {
             return;
@@ -861,6 +935,13 @@ public class PlayerActivity extends BaseActivity {
     private void dismissEpgDialog() {
         if (epgDialog != null) {
             epgDialog.dismiss();
+        }
+    }
+
+    /** Закрыть вопрос «Выйти или настройки» (например, при уходе с экрана). */
+    private void dismissExitDialog() {
+        if (exitDialog != null) {
+            exitDialog.dismiss();
         }
     }
 
@@ -1034,11 +1115,12 @@ public class PlayerActivity extends BaseActivity {
         }
 
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
-            // «Назад»: открыть список каналов; повторно — закрыть; затем выйти из приложения.
+            // «Назад»: открыть список каналов; повторно — закрыть; затем спросить,
+            // выйти из приложения или открыть настройки.
             if (code == KeyEvent.KEYCODE_BACK) {
                 boolean panelEnabled = Settings.isPanelEnabled(this);
                 if (!panelEnabled || overlayShownOnce || channels == null || channels.isEmpty()) {
-                    finishAffinity();
+                    showExitDialog();
                     return true;
                 }
                 showChannelPanel();

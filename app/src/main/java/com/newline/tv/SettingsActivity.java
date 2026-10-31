@@ -1,5 +1,6 @@
 package com.newline.tv;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.KeyEvent;
@@ -41,6 +42,8 @@ public class SettingsActivity extends BaseActivity {
 
     private String source;
     private String channelView;
+    /** Источник, с которым экран открыли: смена источника требует перезапуска. */
+    private String openedSource;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +58,9 @@ public class SettingsActivity extends BaseActivity {
         channelView = savedInstanceState == null
                 ? Settings.getChannelView(this)
                 : savedInstanceState.getString(STATE_VIEW, Settings.getChannelView(this));
+        // Берём именно сохранённый источник: при смене темы экран пересоздаётся,
+        // и выбранное, но ещё не применённое значение не должно терять «изменено».
+        openedSource = Settings.getSource(this);
 
         fillValues();
         wireActions();
@@ -295,6 +301,7 @@ public class SettingsActivity extends BaseActivity {
     }
 
     private void apply() {
+        boolean sourceChanged = !source.equals(openedSource);
         Settings.setSource(this, source);
         Settings.setFontScale(this, scaleFor(scaleSeek.getProgress()));
         Settings.setEpgFontScale(this, scaleFor(epgScaleSeek.getProgress()));
@@ -302,7 +309,23 @@ public class SettingsActivity extends BaseActivity {
         Settings.setPanelTransparency(this, panelSeek.getProgress());
         Settings.setChannelView(this, channelView);
 
+        if (sourceChanged) {
+            // Смена источника меняет весь список каналов, логотипы и EPG —
+            // подхватывать это на лету нельзя, приложение стартует заново.
+            Toast.makeText(this, R.string.settings_source_restart, Toast.LENGTH_SHORT).show();
+            restartApp();
+            return;
+        }
+
         Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
+    /** Полный перезапуск: чистим стек и открываем приложение с экрана заставки. */
+    private void restartApp() {
+        Intent intent = new Intent(this, SplashActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
         finish();
     }
 

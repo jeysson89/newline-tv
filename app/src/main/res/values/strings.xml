@@ -40,6 +40,7 @@
     <string name="settings_close">Закрыть</string>
     <string name="settings_apply">Применить</string>
     <string name="settings_saved">Сохранено</string>
+    <string name="settings_source_restart">Источник изменён. Приложение перезапускается…</string>
 
     <string name="player_error">Ошибка воспроизведения</string>
     <string name="player_retry">Повторить</string>
@@ -59,6 +60,11 @@
     <string name="player_stream_lost">Поток потерян. Проверьте соединение с интернетом.</string>
     <string name="player_channels_title">Каналы</string>
     <string name="player_channels_hint">◀ — настройки, Назад — закрыть</string>
+
+    <!-- Вопрос при выходе из приложения -->
+    <string name="exit_dialog_title">Выйти из приложения?</string>
+    <string name="exit_dialog_hint">Или перейдите в настройки</string>
+    <string name="exit_dialog_exit">Выйти</string>
 
     <!-- Автообновление -->
     <string name="update_title">Обновление</string>

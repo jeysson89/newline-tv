@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Вопрос при выходе: «Выйти» или «Настройки». Появляется, когда «Назад»
+    в плеере уже нечего закрывать, — чтобы приложение не закрывалось случайно.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_epg_dialog"
+    android:orientation="vertical"
+    android:paddingLeft="24dp"
+    android:paddingTop="22dp"
+    android:paddingRight="24dp"
+    android:paddingBottom="22dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/exit_dialog_title"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/exit_dialog_hint"
+        android:textColor="#9AA0A6"
+        android:textSize="14sp" />
+
+    <Button
+        android:id="@+id/exitExit"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="20dp"
+        android:background="@drawable/bg_dialog_primary"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:text="@string/exit_dialog_exit"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/exitSettings"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/bg_epg_close"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:text="@string/settings_title"
+        android:textAllCaps="false"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp" />
+
+</LinearLayout>

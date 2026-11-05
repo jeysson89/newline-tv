@@ -66,7 +66,7 @@ public class PlayerActivity extends BaseActivity {
     private static final String TAG = "NewlineTV";
 
     private static final long OSD_TIMEOUT_MS = 5000L;
-    private static final long VIDEO_CHECK_MS = 4000L;
+    private static final long VIDEO_CHECK_MS = 8000L;
     /** Сколько хранить мини-телепрограмму строки, прежде чем обновить её. */
     private static final long NOW_CACHE_TTL_MS = 10 * 60 * 1000L;
 
@@ -157,6 +157,8 @@ public class PlayerActivity extends BaseActivity {
     private LibVLC libVLC;
     private MediaPlayer vlcPlayer;
     private boolean videoOutputStarted;
+    /** Сколько раз проверяли появление первого кадра (0 — первая проверка ещё не прошла). */
+    private int videoCheckAttempt;
     private boolean wantPlay = true;
 
     // Stop/play у libVLC блокируют поток, пока VLC закрывает сетевой поток. На медленном
@@ -308,12 +310,59 @@ public class PlayerActivity extends BaseActivity {
             if (errorPanel.getVisibility() == View.VISIBLE) {
                 return;
             }
-            if (!videoOutputStarted) {
-                Log.d(TAG, "no video output on " + channelName
-                        + ", videoTracks=" + vlcPlayer.getVideoTracksCount());
-                formatNotice.setText(R.string.player_no_video_stream);
-                formatNotice.setVisibility(View.VISIBLE);
+            if (videoOutputStarted) {
+                return;
             }
+
+            int videoTracks = 0;
+            int decodedVideo = 0;
+            int displayedPictures = 0;
+            IMedia media = null;
+            try {
+                videoTracks = vlcPlayer.getVideoTracksCount();
+                media = vlcPlayer.getMedia();
+                IMedia.Stats stats = media == null ? null : media.getStats();
+                if (stats != null) {
+                    decodedVideo = stats.decodedVideo;
+                    displayedPictures = stats.displayedPictures;
+                }
+            } catch (RuntimeException e) {
+                Log.w(TAG, "videoCheck: " + e);
+            } finally {
+                // getMedia() увеличивает счётчик ссылок — иначе медиа не освободится.
+                if (media != null) {
+                    media.release();
+                }
+            }
+
+            // Кадры уже показываются, просто событие Vout не дошло — не пугаем пользователя.
+            if (displayedPictures > 0) {
+                videoOutputStarted = true;
+                formatNotice.setVisibility(View.GONE);
+                return;
+            }
+
+            // Слабые устройства и HD-потоки могут отдавать первый кадр дольше
+            // четырёх секунд. Даём второй шанс, прежде чем писать про проблему.
+            if (videoCheckAttempt == 0) {
+                videoCheckAttempt++;
+                Log.d(TAG, "no video output yet on " + channelName
+                        + ", videoTracks=" + videoTracks + ", retry");
+                osdHandler.removeCallbacks(videoCheck);
+                osdHandler.postDelayed(videoCheck, VIDEO_CHECK_MS);
+                return;
+            }
+
+            Log.d(TAG, "no video output on " + channelName
+                    + ", videoTracks=" + videoTracks + ", decoded=" + decodedVideo);
+            if (videoTracks > 0 || decodedVideo > 0) {
+                // Видео в потоке есть, но декодер так и не отдал кадр —
+                // это уже не «нет видеопотока», а проблема воспроизведения.
+                formatNotice.setText(R.string.player_no_video_output);
+            } else {
+                formatNotice.setText(R.string.player_no_video_stream);
+            }
+            formatNotice.setVisibility(View.VISIBLE);
         }
     };
 
@@ -1037,12 +1086,18 @@ public class PlayerActivity extends BaseActivity {
 
         IMedia.VideoTrack track = null;
         IMedia.Stats stats = null;
+        IMedia media = null;
         try {
             track = findVideoTrack(player);
-            IMedia media = player.getMedia();
+            media = player.getMedia();
             stats = media == null ? null : media.getStats();
         } catch (RuntimeException e) {
             Log.w(TAG, "stats: " + e);
+        } finally {
+            // getMedia() увеличивает счётчик ссылок — иначе медиа не освободится.
+            if (media != null) {
+                media.release();
+            }
         }
 
         int width = track == null ? 0 : track.width;
@@ -1112,30 +1167,35 @@ public class PlayerActivity extends BaseActivity {
         if (media == null) {
             return player.getCurrentVideoTrack();
         }
-        int selected = player.getVideoTrack();
-        IMedia.VideoTrack first = null;
-        IMedia.VideoTrack selectedTrack = null;
-        int count = media.getTrackCount();
-        for (int i = 0; i < count; i++) {
-            IMedia.Track track = media.getTrack(i);
-            if (!(track instanceof IMedia.VideoTrack)) {
-                continue;
+        try {
+            int selected = player.getVideoTrack();
+            IMedia.VideoTrack first = null;
+            IMedia.VideoTrack selectedTrack = null;
+            int count = media.getTrackCount();
+            for (int i = 0; i < count; i++) {
+                IMedia.Track track = media.getTrack(i);
+                if (!(track instanceof IMedia.VideoTrack)) {
+                    continue;
+                }
+                IMedia.VideoTrack video = (IMedia.VideoTrack) track;
+                if (first == null) {
+                    first = video;
+                }
+                if (video.id == selected) {
+                    selectedTrack = video;
+                }
             }
-            IMedia.VideoTrack video = (IMedia.VideoTrack) track;
-            if (first == null) {
-                first = video;
+            if (selectedTrack != null && selectedTrack.width > 0 && selectedTrack.height > 0) {
+                return selectedTrack;
             }
-            if (video.id == selected) {
-                selectedTrack = video;
+            if (first != null && first.width > 0 && first.height > 0) {
+                return first;
             }
+            return selectedTrack != null ? selectedTrack : first;
+        } finally {
+            // getMedia() увеличивает счётчик ссылок — иначе медиа не освободится.
+            media.release();
         }
-        if (selectedTrack != null && selectedTrack.width > 0 && selectedTrack.height > 0) {
-            return selectedTrack;
-        }
-        if (first != null && first.width > 0 && first.height > 0) {
-            return first;
-        }
-        return selectedTrack != null ? selectedTrack : first;
     }
 
     private String protocolLabel() {
@@ -1815,6 +1875,7 @@ public class PlayerActivity extends BaseActivity {
         lastPosAt = 0;
         healthyFrom = 0;
         videoOutputStarted = false;
+        videoCheckAttempt = 0;
         wantPlay = true;
         resetStatsBaseline();
         if (formatNotice != null) {
@@ -1838,6 +1899,7 @@ public class PlayerActivity extends BaseActivity {
         lastPos = -1;
         lastPosAt = 0;
         videoOutputStarted = false;
+        videoCheckAttempt = 0;
         buffering.setVisibility(View.VISIBLE);
         errorPanel.setVisibility(View.GONE);
 
